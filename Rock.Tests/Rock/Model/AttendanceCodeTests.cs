@@ -1,81 +1,64 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Rock;
-using Rock.Data;
 using Rock.Model;
 using Xunit;
 
 namespace Rock.Tests.Rock.Model
 {
-    /// <summary>
-    /// Used for testing anything regarding AttendanceCode.
-    /// NOTE on IDisposable: We'd like to be able to use IDisposble to perform automatic Cleanup() after
-    /// each test method but we can't do this until we can safely run tests that have a db (ie, we don't
-    /// want to break other teams CI environments that are running these tests w/o a db.
-    /// </summary>
-    /// <seealso cref="System.IDisposable" />
-    public class AttendanceCodeTests : IDisposable
+    public class AttendanceCodeTests
     {
-        private static List<string> noGood = new List<string> {
-            "4NL", "4SS", "5CK", "5HT", "5LT", "5NM", "5TD", "5XX", "666", "BCH", "CLT", "CNT", "D4M", "D5H", "DCK", "DMN", "DSH", "F4G", "FCK", "FGT", "G4Y", "GZZ", "H8R",
-            "JNK", "JZZ", "KKK", "KLT", "KNT", "L5D", "LCK", "LSD", "MFF", "MLF", "ND5", "NDS", "NDZ", "NGR", "P55", "PCP", "PHC", "PHK", "PHQ", "PM5", "PMS", "PN5", "PNS",
-            "PRC", "PRK", "PRN", "PRQ", "PSS", "RCK", "SCK", "S3X", "SHT", "SLT", "SNM", "STD", "SXX", "THC", "V4G", "WCK", "XTC", "XXX", "911" };
+        #region Alpha-numeric codes
 
-        /// <summary>
-        /// Setup test which cleans the AttendanceCode table for these tests.
-        /// </summary>
-        public AttendanceCodeTests()
+        [Fact]
+        public void SkipBanned3DigitCodeAtEndOfAlphaNumericCode()
         {
-            // Someday when we can run these tests on all systems without the [Skip...
-            // we can uncomment these cleanup calls, and remove the Cleanup calls
-            // from each test below.
-            //Cleanup();
+            int alphaNumericLength = 0;
+            int alphaLength = 1;
+            int numericLength = 3;
+            bool isRandomized = false;
+            string lastCode = "X665";
+
+            string code = AttendanceCodeService.GetNextNumericCodeAsString( alphaNumericLength, alphaLength, numericLength, isRandomized, lastCode );
+            Assert.Equal( "667", code.Right( 3 ) );
         }
 
         /// <summary>
-        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-        /// </summary>
-        public void Dispose()
-        {
-            // Someday when we can run these tests on all systems without the [Skip...
-            // we can uncomment these cleanup calls, and remove the Cleanup calls
-            // from each test below.
-            //Cleanup();
-        }
-
-        /// <summary>
-        /// Deletes the test data added to the database for each tests.
-        /// </summary>
-        public void Cleanup()
-        {
-            using ( var rockContext = new RockContext() )
-            {
-                var service = new AttendanceCodeService( rockContext );
-
-                DateTime today = RockDateTime.Today;
-                DateTime tomorrow = today.AddDays( 1 );
-                var todaysCodes = service.Queryable()
-                        .Where( c => c.IssueDateTime >= today && c.IssueDateTime < tomorrow )
-                        .ToList();
-                if ( todaysCodes.Any() )
-                {
-                    service.DeleteRange( todaysCodes );
-                    rockContext.SaveChanges();
-                }
-            }
-            AttendanceCodeService.FlushTodaysCodes();
-        }
-
-        #region Tests that don't require a database/context
-
-        /// <summary>
-        /// Avoids the triple six.  Note: Does not use the database.
+        /// Verify that three character alpha-numeric codes are all good codes.
         /// </summary>
         [Fact]
-        public void AvoidTripleSix()
+        public void AlphaNumericCodesShouldSkipBadCodes()
+        {
+            AttendanceCodeService.FlushTodaysCodes(true);
+
+            for ( int i = 0; i < 6000; i++ )
+            {
+                AttendanceCodeService.GetNewCode( 3, 0, 0, false );
+            }
+
+            bool hasMatchIsBad = AttendanceCodeService.TodaysCodes.Any( c => AttendanceCodeService.BannedCodes.Any( c.Contains ) );
+
+            Assert.False( hasMatchIsBad );
+        }
+
+        #endregion
+
+        #region Numeric only codes
+
+        [Fact]
+        public void SkipBanned3DigitCode()
+        {
+            int alphaNumericLength = 0;
+            int alphaLength = 0;
+            int numericLength = 3;
+            bool isRandomized = false;
+            string lastCode = "665";
+
+            string code = AttendanceCodeService.GetNextNumericCodeAsString( alphaNumericLength, alphaLength, numericLength, isRandomized, lastCode );
+            Assert.Equal( "667", code );
+        }
+
+        [Fact]
+        public void SkipBanned3DigitCodeAtEnd()
         {
             int alphaNumericLength = 0;
             int alphaLength = 0;
@@ -87,87 +70,77 @@ namespace Rock.Tests.Rock.Model
             Assert.Equal( "0667", code );
         }
 
-        #endregion
-
-        #region Alpha-numeric codes
-
-        [Fact( Skip = "Requires a db" )]
-        public void AlphaNumericCodesShouldSkipBadCodes()
+        [Fact]
+        public void SkipBanned3DigitCodeAtBeginning()
         {
-            Cleanup();
+            int alphaNumericLength = 0;
+            int alphaLength = 0;
+            int numericLength = 4;
+            bool isRandomized = false;
+            string lastCode = "6659";
 
-            var codeList = new List<string>();
-            AttendanceCode code = null;
-            for ( int i = 0; i < 6000; i++ )
-            {
-                code = AttendanceCodeService.GetNew( 3, 0, 0, false );
-                codeList.Add( code.Code );
-            }
-
-            bool hasMatchIsBad = codeList.Where( c => noGood.Any( ng => c.Contains( ng ) ) ).Any();
-
-            Assert.False( hasMatchIsBad );
+            string code = AttendanceCodeService.GetNextNumericCodeAsString( alphaNumericLength, alphaLength, numericLength, isRandomized, lastCode );
+            Assert.Equal( "6670", code );
         }
 
-        #endregion
-
-        #region Numeric only codes
-
-        [Fact( Skip = "Requires a db" )]
+        /// <summary>
+        /// Checks the three char "002" code.
+        /// </summary>
+        [Fact]
         public void CheckThreeChar002Code()
         {
-            Cleanup();
+            AttendanceCodeService.FlushTodaysCodes( true );
 
-            AttendanceCode code = null;
+            string code = null;
             for ( int i = 0; i < 2; i++ )
             {
-                code = AttendanceCodeService.GetNew( 0, 0, 3, false );
+                code = AttendanceCodeService.GetNewCode( 0, 0, 3, false );
             }
 
-            Assert.Equal( "002", code.Code );
+            Assert.Equal( "002", code );
         }
 
-        [Fact( Skip = "Requires a db" )]
-        public void NumericCodesShouldSkip911And666()
+        /// <summary>
+        /// Confirms that the three restricted numeric codes
+        /// </summary>
+        [Fact]
+        public void NumericCodesShouldNotContainRestrictedNumbers()
         {
-            Cleanup();
+            AttendanceCodeService.FlushTodaysCodes( true );
 
-            var codeList = new List<string>();
-            AttendanceCode code = null;
             for ( int i = 0; i < 2000; i++ )
             {
-                code = AttendanceCodeService.GetNew( 0, 0, 4, false );
-                codeList.Add( code.Code );
+                AttendanceCodeService.GetNewCode( 0, 0, 4, false );
             }
 
-            Assert.False( codeList.Any( s => s.Contains( "911" ) ) );
-            Assert.False( codeList.Any( s => s.Contains( "666" ) ) );
+            Assert.False( AttendanceCodeService.TodaysCodes.Any( s => s.Contains( "911" ) ) );
+            Assert.False( AttendanceCodeService.TodaysCodes.Any( s => s.Contains( "666" ) ) );
+            Assert.False( AttendanceCodeService.TodaysCodes.Any( s => s.Contains( "999" ) ) );
+            Assert.False( AttendanceCodeService.TodaysCodes.Any( s => s.Contains( "455" ) ) );
         }
 
         /// <summary>
         /// Numeric only code with length of 2 should not go beyond 99.
-        /// Attempting to create one should not be allowed so throwing a
-        /// timeout exception is acceptable to let the admin know there is a
+        /// Attempting to create one should not be allowed so throwing a timeout
+        /// exception is acceptable to let the administrator know there is a
         /// configuration problem.
         /// </summary>
-        [Fact( Skip = "Requires a db" )]
+        [Fact]
         public void NumericCodeWithLengthOf2ShouldNotGoBeyond99()
         {
-            Cleanup();
-
             try
             {
-                var codeList = new List<string>();
-                AttendanceCode code = null;
+                AttendanceCodeService.FlushTodaysCodes( true );
+
                 for ( int i = 0; i < 101; i++ )
                 {
-                    code = AttendanceCodeService.GetNew( 0, 0, 2, false );
-                    codeList.Add( code.Code );
+                    AttendanceCodeService.GetNewCode( 0, 0, 2, false );
                 }
 
-                // should not be longer than 4 characters
+                // should not be longer than 2 characters
                 // This is a known bug in v7.4 and earlier, and possibly fixed via PR #3071
-                Assert.True( codeList.Last().Length == 4 );
+                var length = AttendanceCodeService.TodaysCodes.Last().Length;
+                Assert.True( length == 2, "last code was " + length + " characters long." );
             }
             catch ( TimeoutException )
             {
@@ -178,112 +151,73 @@ namespace Rock.Tests.Rock.Model
         }
 
         /// <summary>
-        /// Numerics codes should not repeat.  This is/was a known bug in v7.4 and earlier
+        /// Numerics codes should not repeat. There are 996 possible good numeric three character codes.
         /// </summary>
-        [Fact( Skip = "Requires a db" )]
+        [Fact]
         public void NumericCodesShouldNotRepeat()
         {
-            Cleanup();
+            AttendanceCodeService.FlushTodaysCodes( true );
 
-            var codeList = new List<string>();
-            AttendanceCode code = null;
-            for ( int i = 0; i < 999; i++ )
+            for ( int i = 0; i < 996; i++ )
             {
-                code = AttendanceCodeService.GetNew( 0, 0, 3, false );
-                codeList.Add( code.Code );
+                AttendanceCodeService.GetNewCode( 0, 0, 3, false );
             }
 
-            var duplicates = codeList.GroupBy( x => x )
-                                    .Where( group => group.Count() > 1 )
-                                    .Select( group => group.Key );
+            var duplicates = AttendanceCodeService.TodaysCodes.GroupBy( x => x )
+                                                  .Where( group => group.Count() > 1 )
+                                                  .Select( group => group.Key )
+                                                  .ToList();
 
-            Assert.True( duplicates.Count() == 0 );
+            Assert.True( !duplicates.Any(), "repeated codes: " + string.Join( ", ", duplicates ) );
         }
 
         /// <summary>
-        /// Numerics codes should not repeat.  This is/was a known bug in v7.4 and earlier
+        /// Random numeric codes should not repeat. There are 996 possible good numeric three character codes.
         /// </summary>
-        [Fact( Skip = "Requires a db" )]
+        [Fact]
         public void RandomNumericCodesShouldNotRepeat()
         {
-            Cleanup();
+            AttendanceCodeService.FlushTodaysCodes( true );
 
-            var codeList = new List<string>();
-            AttendanceCode code = null;
-            for ( int i = 0; i < 999; i++ )
+            for ( int i = 0; i < 996; i++ )
             {
-                code = AttendanceCodeService.GetNew( 0, 0, 3, true );
-                codeList.Add( code.Code );
+                AttendanceCodeService.GetNewCode( 0, 0, 3, true );
             }
 
-            var duplicates = codeList.GroupBy( x => x )
-                                    .Where( group => group.Count() > 1 )
-                                    .Select( group => group.Key );
+            var duplicates = AttendanceCodeService.TodaysCodes.GroupBy( x => x )
+                                                  .Where( group => group.Count() > 1 )
+                                                  .Select( group => group.Key )
+                                                  .ToList();
 
-            Assert.True( duplicates.Count() == 0 );
+            Assert.True( !duplicates.Any(), "repeated codes: " + string.Join( ", ", duplicates ) );
         }
 
         /// <summary>
         /// Requestings the more codes than are possible should throw exception...
-        /// because there's really nothing else we could do in that situation, right.
+        /// because there's really nothing else we could do in that situation, right?
+        /// 
+        /// NOTE: This test has a special setup using an async task so that we can break
+        /// out if the underlying Rock service call is hung in an infinite loop.
         /// </summary>
-        [Fact( Skip = "Requires a db" )]
-        public async void RequestingMoreCodesThanPossibleShouldThrowException()
+        [Fact]
+        public void RequestingMoreCodesThanPossibleShouldThrowException()
         {
-            Cleanup();
-
-            var codeList = new List<string>();
-            AttendanceCode code = null;
+            AttendanceCodeService.FlushTodaysCodes( true );
 
             // Generate 99 codes (the maximum number of valid codes).
             for ( int i = 0; i < 100; i++ )
             {
-                code = AttendanceCodeService.GetNew( 0, 0, 2, true );
-                codeList.Add( code.Code );
+                AttendanceCodeService.GetNewCode( 0, 0, 2, true );
             }
 
-            // Now try to generate one more...
+            // Now try to generate one more... which should NOT hang but instead, may
+            // throw one of two exceptions.
             try
             {
-                // We'll give this test only 30 seconds to complete, otherwise it's considered a failure.
-                // We'll prevent this call from hanging even if there is an infinite loop in the GetNew(...) call.
-                using ( var source = new CancellationTokenSource() )
-                {
-                    source.CancelAfter( TimeSpan.FromSeconds( 30 ) );
-                    var completionSource = new TaskCompletionSource<object>();
-                    source.Token.Register( () => completionSource.TrySetCanceled() );
-
-                    // call the hundredth time (which typically hangs in v7.4 and earlier)
-                    var task = Task<AttendanceCode>.Factory.StartNew( () => AttendanceCodeService.GetNew( 0, 0, 2, true ), source.Token );
-                    await Task.WhenAny( task, completionSource.Task );
-
-                    // We can't check the task's Result property or else it will block again until there is a result...
-                    // ...but there is Result in the impossible case, so we're going to ignore the result anyhow.
-                    // code = task.Result; // <-- don't do this
-
-                    // If the task is still running, then it's a fail.
-                    if ( task.Status != TaskStatus.RanToCompletion )
-                    {
-                        // ... and I'd like to abort the task, but I've read this is a bad idea in production
-                        // environments so we will call Cancel():
-                        // https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/async/cancel-async-tasks-after-a-period-of-time
-                        source.Cancel();
-
-                        Assert.True( task.Status == TaskStatus.Faulted );
-                    }
-                    else
-                    {
-                        // This should never happen. If it does, it means we're not really 
-                        // attempting to generate more codes than are possible -- so it's a Fail
-                        // too.
-                        Assert.True( true );
-                    }
-                }
+                AttendanceCodeService.GetNewCode( 0, 0, 2, true );
             }
-            catch ( OperationCanceledException )
+            catch ( InvalidOperationException )
             {
-                // An exception in this case is considered better than hanging (since there is 
-                // no actual solution).
                 Assert.True( true );
             }
             catch ( TimeoutException )
@@ -294,67 +228,68 @@ namespace Rock.Tests.Rock.Model
             }
         }
 
-        [Fact( Skip = "Requires a db" )]
+        /// <summary>
+        /// Sequentially increment three-character numeric codes to 100 and verify "100".
+        /// </summary>
+        [Fact]
         public void Increment100SequentialNumericCodes()
         {
-            Cleanup();
+            AttendanceCodeService.FlushTodaysCodes( true );
 
-            AttendanceCode code = null;
+            string code = null;
             for ( int i = 0; i < 100; i++ )
             {
-                code = AttendanceCodeService.GetNew( 0, 0, 3, false );
+                code = AttendanceCodeService.GetNewCode( 0, 0, 3, false );
             }
 
-            Assert.Equal( "100", code.Code );
+            Assert.Equal( "100", code );
         }
 
         #endregion
 
         #region Alpha only codes
 
-        [Fact( Skip = "Requires a db" )]
+        /// <summary>
+        /// Three character alpha only codes should not 'contain' any bad codes.
+        /// </summary>
+        [Fact]
         public void AlphaOnlyCodesShouldSkipBadCodes()
         {
-            Cleanup();
+            AttendanceCodeService.FlushTodaysCodes( true );
 
-            var codeList = new List<string>();
-            AttendanceCode code = null;
             for ( int i = 0; i < 1000; i++ )
             {
-                code = AttendanceCodeService.GetNew( 0, 3, 0, true );
-                codeList.Add( code.Code );
+                AttendanceCodeService.GetNewCode( 0, 3, 0, true );
             }
 
-            bool hasMatchIsBad = codeList.Where( c => noGood.Any( ng => c.Contains( ng ) ) ).Any();
+            bool hasMatchIsBad = AttendanceCodeService.TodaysCodes.Any( c => AttendanceCodeService.BannedCodes.Any( c.Contains ) );
 
             Assert.False( hasMatchIsBad );
         }
 
         /// <summary>
-        /// Alpha codes should not repeat.
+        /// Alpha codes should not repeat.  For three character codes there are approximately
+        ///  4847 (17*17*17 minus ~50 bad codes) possible combinations of the 17 letters
         /// </summary>
-        [Fact( Skip = "Requires a db" )]
+        [Fact]
         public void AlphaOnlyCodesShouldNotRepeat()
         {
-            Cleanup();
+            AttendanceCodeService.FlushTodaysCodes( true );
 
-            var codeList = new List<string>();
-            AttendanceCode code = null;
-
-            // 4847 (17*17*17 minus ~50 badcodes) possible combinations of 17 letters
+            // 4847 (17*17*17 minus ~50 bad codes) possible combinations of 17 letters
             for ( int i = 0; i < 4860; i++ )
             {
                 //System.Diagnostics.Debug.WriteIf( i > 4700, "code number " + i + " took... " );
-                code = AttendanceCodeService.GetNew( 0, 3, 0, false );
-                codeList.Add( code.Code );
+                AttendanceCodeService.GetNewCode( 0, 3, 0, false );
+                
                 //System.Diagnostics.Debug.WriteLineIf( i > 4700, "" );
             }
 
-            var duplicates = codeList.GroupBy( x => x )
+            var duplicates = AttendanceCodeService.TodaysCodes.GroupBy( x => x )
                                     .Where( group => group.Count() > 1 )
                                     .Select( group => group.Key );
 
-            Assert.True( duplicates.Count() == 0 );
+            Assert.True( !duplicates.Any() );
         }
 
         #endregion
@@ -362,41 +297,47 @@ namespace Rock.Tests.Rock.Model
         #region Alpha-numeric + numeric only codes
 
         /// <summary>
-        /// NOTE: This appears to be a current bug in v8.0 and earlier.  It cazn only generate 100 codes
-        /// Two character alpha numeric codes (codeCharacters) has possible 24*24 (576) combinations
-        /// plus two character numeric codes has a possible 10*10 (100) for a total set of
-        /// 676 combinations.  Removing the noGood (~60) codes leaves us with a valid set of
-        /// 616 codes.
-        /// There should be no bad codes in this list either even though
-        /// individually each part has no bad codes.
+        /// Two character alpha numeric codes (AttendanceCodeService.codeCharacters) has possible
+        /// 24*24 (576) combinations plus two character numeric codes has a possible 10*10 (100)
+        /// for a total set of 676 combinations.  Removing the noGood (~60) codes leaves us with
+        /// a valid set of about 616 codes.
+        /// 
+        /// NOTE: This appears to be a possible bug in v8.0 and earlier. The AttendanceCodeService
+        /// service will only generate 100 codes when trying to combine the numeric parameter of "2" with
+        /// the other parameters.
+        ///
+        /// Even when run with 2 alpha numeric and 3 numeric, this test should verify that codes
+        /// such as X6662, 99119, 66600 do not occur.
+        /// 
+        /// There should be no bad codes in the generated AttendanceCodeService.TodaysCodes -- even though
+        /// individually each part has no bad codes.  For example, "A6" + "66" should
+        /// not appear since combined it would be "A666".
         /// </summary>
-        [Fact( Skip = "Requires a db" )]
+        [Fact]
         public void AlphaNumericWithNumericCodesShouldSkipBadCodes()
         {
-            Cleanup();
+            AttendanceCodeService.FlushTodaysCodes( true );
+
             int attemptCombination = 0;
 
             try
             {
-                var codeList = new List<string>();
-                AttendanceCode code = null;
-                for ( int i = 0; i < 676; i++ )
+                for ( int i = 0; i < 600; i++ )
                 {
                     attemptCombination = i;
-                    code = AttendanceCodeService.GetNew( 2, 0, 2, true );
-                    codeList.Add( code.Code );
+                    AttendanceCodeService.GetNewCode( 2, 0, 3, true );
                 }
 
-                bool hasMatchIsBad = codeList.Where( c => noGood.Any( ng => c.Contains( ng ) ) ).Any();
+                var matches = AttendanceCodeService.TodaysCodes.Where( c => AttendanceCodeService.BannedCodes.Any( c.Contains ) ).ToList();
+                bool hasMatchIsBad = matches.Any();
 
-                Assert.False( hasMatchIsBad );
-
+                Assert.False( hasMatchIsBad, "bad codes were: " + string.Join( ", ", matches ) );
             }
-            catch( TimeoutException )
+            catch ( TimeoutException )
             {
-                // If an infinite loop was detected, but we tried at least 616 codes then
+                // If an infinite loop was detected, but we tried at least 600 codes then
                 // we'll consider this a pass.
-                Assert.True( attemptCombination >= 616 );
+                Assert.True( attemptCombination >= 600 );
             }
         }
 
@@ -404,25 +345,48 @@ namespace Rock.Tests.Rock.Model
 
         #region Alpha only + numeric only codes
 
-        [Fact( Skip = "Requires a db" )]
+        /// <summary>
+        /// This is the configuration that churches like Central Christian Church use for thier
+        /// Children's check-in.
+        /// </summary>
+        [Fact]
+        public void TwoAlphaWithFourRandomNumericCodesShouldSkipBadCodes()
+        {
+            AttendanceCodeService.FlushTodaysCodes( true );
+
+            for ( int i = 0; i < 2500; i++ )
+            {
+                AttendanceCodeService.GetNewCode( 0, 2, 4, true );
+            }
+
+            var matches = AttendanceCodeService.TodaysCodes.Where( c => AttendanceCodeService.BannedCodes.Any( ng => c.Contains( ng ) ) ).ToList();
+
+            bool hasMatchIsBad = matches.Any();
+
+            Assert.False( hasMatchIsBad, "bad codes were: " + string.Join( ", ", matches ) );
+        }
+
+        /// <summary>
+        /// Codes containing parts combined into noGood codes, such as "P" + "55",
+        /// should not occur.
+        /// </summary>
+        [Fact]
         public void AlphaOnlyWithNumericOnlyCodesShouldSkipBadCodes()
         {
-            Cleanup();
+            AttendanceCodeService.FlushTodaysCodes( true );
 
-            var codeList = new List<string>();
             AttendanceCode code = null;
             for ( int i = 0; i < 6000; i++ )
             {
-                code = AttendanceCodeService.GetNew( 0, 3, 4, true );
-                codeList.Add( code.Code );
+                AttendanceCodeService.GetNewCode( 0, 1, 4, true );
             }
 
-            bool hasMatchIsBad = codeList.Where( c => noGood.Any( ng => c.Contains( ng ) ) ).Any();
+            var matches = AttendanceCodeService.TodaysCodes.Where( c => AttendanceCodeService.BannedCodes.Any( ng => c.Contains( ng ) ) ).ToList();
+            bool hasMatchIsBad = matches.Any();
 
-            Assert.False( hasMatchIsBad );
+            Assert.False( hasMatchIsBad, "bad codes were: " + string.Join( ", ", matches ) );
         }
-        
-        #endregion
 
+        #endregion
     }
 }

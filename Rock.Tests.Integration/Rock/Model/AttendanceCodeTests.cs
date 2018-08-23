@@ -17,11 +17,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Rock;
 using Rock.Data;
 using Rock.Model;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Data.Entity;
+using System.Data.Entity.Core;
+using System.Data.SqlClient;
 
 namespace Rock.Tests.Integration.Model
 {
@@ -32,6 +32,8 @@ namespace Rock.Tests.Integration.Model
     [TestClass]
     public class AttendanceCodeTests : IDisposable
     {
+        private DateTime _testStart;
+
         /// <summary>
         /// Runs before any tests in this class are executed.
         /// </summary>
@@ -46,7 +48,8 @@ namespace Rock.Tests.Integration.Model
         /// </summary>
         public void TestInitialize()
         {
-            Cleanup();
+            _testStart = DateTime.Now;
+            AttendanceCodeService.FlushTodaysCodes( true );
         }
 
         /// <summary>
@@ -62,32 +65,47 @@ namespace Rock.Tests.Integration.Model
         /// </summary>
         public void Cleanup()
         {
-            using ( var rockContext = new RockContext() )
+            try
             {
-
-                var acService = new AttendanceCodeService( rockContext );
-                var attendanceService = new AttendanceService( rockContext );
-
-                DateTime today = RockDateTime.Today;
-                DateTime tomorrow = today.AddDays( 1 );
-                var todaysCodes = acService.Queryable()
-                        .Where( c => c.IssueDateTime >= today && c.IssueDateTime < tomorrow )
-                        .ToList();
-                if ( todaysCodes.Any() )
+                using ( var rockContext = new RockContext() )
                 {
-                    var ids = todaysCodes.Select( c => c.Id ).ToList();
+                    var acService = new AttendanceCodeService( rockContext );
+                    var attendanceService = new AttendanceService( rockContext );
 
-                    // get the corresponding attendance records and delete them first.
-                    var todayTestAttendance = attendanceService.Queryable().Where( a => ids.Contains( a.AttendanceCodeId.Value ) );
-                    if ( todayTestAttendance.Any() )
+                    DateTime tomorrow = RockDateTime.Today.AddDays( 1 );
+                    var todaysCodes = acService.Queryable()
+                                               .Where( c => c.IssueDateTime >= _testStart && c.IssueDateTime < tomorrow )
+                                               .Where( c => AttendanceCodeService.TodaysCodes.Contains( c.Code ) )
+                                               .ToList();
+
+                    if ( todaysCodes.Any() )
                     {
-                        attendanceService.DeleteRange( todayTestAttendance );
+                        var ids = todaysCodes.Select( c => c.Id ).ToList();
+
+                        // get the corresponding attendance records and delete them first.
+                        var todayTestAttendance = attendanceService.Queryable().Where( a => ids.Contains( a.AttendanceCodeId.Value ) );
+
+                        if ( todayTestAttendance.Any() )
+                        {
+                            attendanceService.DeleteRange( todayTestAttendance );
+                        }
+
+                        acService.DeleteRange( todaysCodes );
+                        rockContext.SaveChanges();
                     }
-                    acService.DeleteRange( todaysCodes );
-                    rockContext.SaveChanges();
                 }
             }
-            AttendanceCodeService.FlushTodaysCodes();
+            // Cleaning up extraneous records is good, but don't fail the test just because this times out.
+            // A timeout gets caught as an EntityCommandExecutionException with an SqlException with Number == 2 as its InnerException.
+            catch ( EntityCommandExecutionException ex )
+            {
+                var innerEx = ex.InnerException as SqlException;
+
+                if ( innerEx == null || innerEx.Number != -2 )
+                {
+                    throw;
+                }
+            }
         }
 
         #region Alpha-numeric codes
@@ -106,7 +124,7 @@ namespace Rock.Tests.Integration.Model
                 codeList.Add( code.Code );
             }
 
-            bool hasMatchIsBad = codeList.Where( c => AttendanceCodeService.noGood.Any( ng => c.Contains( ng ) ) ).Any();
+            bool hasMatchIsBad = codeList.Any(c => AttendanceCodeService.BannedCodes.Any( c.Contains ));
 
             Assert.IsFalse( hasMatchIsBad );
         }
@@ -131,11 +149,10 @@ namespace Rock.Tests.Integration.Model
         }
 
         /// <summary>
-        /// NOTE: This test currently fails in Rock v8 and earlier.
+        /// Confirms that the three restricted numeric codes
         /// </summary>
-        [Ignore( "Known issue in v8 and earlier. Remove this ignore when fixed." )]
         [TestMethod]
-        public void NumericCodesShouldNotContain911And666()
+        public void NumericCodesShouldNotContainRestrictedNumbers()
         {
             var codeList = new List<string>();
             AttendanceCode code = null;
@@ -147,6 +164,8 @@ namespace Rock.Tests.Integration.Model
 
             Assert.IsFalse( codeList.Any( s => s.Contains( "911" ) ) );
             Assert.IsFalse( codeList.Any( s => s.Contains( "666" ) ) );
+            Assert.IsFalse( codeList.Any( s => s.Contains( "999" ) ) );
+            Assert.IsFalse( codeList.Any( s => s.Contains( "455" ) ) );
         }
 
         /// <summary>
@@ -155,7 +174,7 @@ namespace Rock.Tests.Integration.Model
         /// exception is acceptable to let the administrator know there is a
         /// configuration problem.
         /// </summary>
-        [Ignore( "Known issue in v8 and earlier. Remove this ignore when fixed." )]
+        //[Ignore( "Known issue in v8 and earlier. Remove this ignore when fixed." )]
         [TestMethod]
         public void NumericCodeWithLengthOf2ShouldNotGoBeyond99()
         {
@@ -182,14 +201,14 @@ namespace Rock.Tests.Integration.Model
         }
 
         /// <summary>
-        /// Numerics codes should not repeat. There are 998 possible good numeric three character codes.
+        /// Numerics codes should not repeat. There are 996 possible good numeric three character codes.
         /// </summary>
         [TestMethod]
         public void NumericCodesShouldNotRepeat()
         {
             var codeList = new List<string>();
             AttendanceCode code = null;
-            for ( int i = 0; i < 998; i++ )
+            for ( int i = 0; i < 996; i++ )
             {
                 code = AttendanceCodeService.GetNew( 0, 0, 3, false );
                 codeList.Add( code.Code );
@@ -203,14 +222,14 @@ namespace Rock.Tests.Integration.Model
         }
 
         /// <summary>
-        /// Random numeric codes should not repeat. There are 998 possible good numeric three character codes.
+        /// Random numeric codes should not repeat. There are 996 possible good numeric three character codes.
         /// </summary>
         [TestMethod]
         public void RandomNumericCodesShouldNotRepeat()
         {
             var codeList = new List<string>();
             AttendanceCode code = null;
-            for ( int i = 0; i < 998; i++ )
+            for ( int i = 0; i < 996; i++ )
             {
                 code = AttendanceCodeService.GetNew( 0, 0, 3, true );
                 codeList.Add( code.Code );
@@ -294,7 +313,7 @@ namespace Rock.Tests.Integration.Model
                 codeList.Add( code.Code );
             }
 
-            bool hasMatchIsBad = codeList.Where( c => AttendanceCodeService.noGood.Any( ng => c.Contains( ng ) ) ).Any();
+            bool hasMatchIsBad = codeList.Any(c => AttendanceCodeService.BannedCodes.Any( c.Contains ));
 
             Assert.IsFalse( hasMatchIsBad );
         }
@@ -346,7 +365,6 @@ namespace Rock.Tests.Integration.Model
         /// individually each part has no bad codes.  For example, "A6" + "66" should
         /// not appear since combined it would be "A666".
         /// </summary>
-        [Ignore( "Known issue in v8 and earlier. Remove this ignore when fixed." )]
         [TestMethod]
         public void AlphaNumericWithNumericCodesShouldSkipBadCodes()
         {
@@ -363,7 +381,7 @@ namespace Rock.Tests.Integration.Model
                     codeList.Add( code.Code );
                 }
 
-                var matches = codeList.Where( c => AttendanceCodeService.noGood.Any( ng => c.Contains( ng ) ) );
+                var matches = codeList.Where( c => AttendanceCodeService.BannedCodes.Any( c.Contains ) );
                 bool hasMatchIsBad = matches.Any();
 
                 Assert.IsFalse( hasMatchIsBad, "bad codes were: " + string.Join( ", ", matches ) );
@@ -398,10 +416,7 @@ namespace Rock.Tests.Integration.Model
                 codeList.Add( code.Code );
             }
 
-            // TODO: Once the combination of codes issue is addressed, this next line should be uncommented
-            // and replace the one below it:
-            //var matches = codeList.Where( c => AttendanceCodeService.noGood.Any( ng => c.Contains( ng ) ) );
-            var matches = codeList.Select( x => x ).Intersect( AttendanceCodeService.noGood );
+            var matches = codeList.Where( c => AttendanceCodeService.BannedCodes.Any( ng => c.Contains( ng ) ) );
 
             bool hasMatchIsBad = matches.Any();
 
@@ -412,7 +427,6 @@ namespace Rock.Tests.Integration.Model
         /// Codes containing parts combined into noGood codes, such as "P" + "55",
         /// should not occur.
         /// </summary>
-        [Ignore("Known issue in v8 and earlier. Remove this ignore when fixed.")]
         [TestMethod]
         public void AlphaOnlyWithNumericOnlyCodesShouldSkipBadCodes()
         {
@@ -424,7 +438,7 @@ namespace Rock.Tests.Integration.Model
                 codeList.Add( code.Code );
             }
 
-            var matches = codeList.Where( c => AttendanceCodeService.noGood.Any( ng => c.Contains( ng ) ) );
+            var matches = codeList.Where( c => AttendanceCodeService.BannedCodes.Any( ng => c.Contains( ng ) ) );
             bool hasMatchIsBad = matches.Any();
 
             Assert.IsFalse( hasMatchIsBad , "bad codes were: " + string.Join(", ", matches ) );
