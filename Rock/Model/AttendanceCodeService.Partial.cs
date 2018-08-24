@@ -24,15 +24,14 @@ using Rock.Data;
 
 namespace Rock.Model
 {
-    /// <summary>
-    /// Data Access/Service class for <see cref="Rock.Model.AttendanceCode"/> entity types
-    /// </summary>
-    public partial class AttendanceCodeService
+    public interface IAttendanceCodeProvider
     {
-        private static readonly object _obj = new object();
-        private static readonly Random _random = new Random( Guid.NewGuid().GetHashCode() );
-        private static DateTime? _today;
+        string GetCode();
+    }
 
+    public class AttendanceCodeGenerator : IAttendanceCodeProvider
+    {
+        private static readonly Random _random = new Random( Guid.NewGuid().GetHashCode() );
         /// <summary>
         /// An array of alpha characters that can be used as a part of  <see cref="Rock.Model.AttendanceCode">AttendanceCodes</see>
         /// </summary>
@@ -47,6 +46,120 @@ namespace Rock.Model
         /// An array of characters that can be used as a part of  <see cref="Rock.Model.AttendanceCode">AttendanceCodes</see>
         /// </summary>
         public static readonly char[] CodeCharacters = AlphaCharacters.Concat( NumericCharacters ).ToArray();
+
+        public int AlphaNumericLength;
+        public int AlphaLength;
+        public int NumericLength;
+        public bool IsRandomized;
+        public List<string> BannedCodes;
+        public HashSet<string> TodaysCodes;
+
+        public string GetCode() => GenerateRandomAlphaNumericCode() + GenerateRandomAlphaCode() + GetNextNumericCode();
+
+        private string LastCode
+        {
+            get
+            {
+                if ( NumericLength > 0 && !IsRandomized )
+                {
+                    return TodaysCodes.Where( c => c.Length == AlphaNumericLength + AlphaLength + NumericLength )
+                                      .OrderBy( c => c.Substring( AlphaNumericLength + AlphaLength ) )
+                                      .LastOrDefault();
+                }
+
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets the next numeric code as string.
+        /// </summary>
+        /// <returns></returns>
+        private string GetNextNumericCode()
+        {
+            if ( IsRandomized )
+            {
+                return GenerateRandomNumericCode();
+            }
+
+            var lastCode = LastCode;
+            if ( !string.IsNullOrEmpty( lastCode ) )
+            {
+                var maxCode = lastCode.Substring( AlphaNumericLength + AlphaLength );
+                int nextCode = maxCode.AsInteger() + 1;
+
+                // Cycle through any numbers that include any restricted numbers until an unrestricted one is found
+                while ( BannedCodes.Any( s => nextCode.ToString().Contains( s ) ) )
+                {
+                    nextCode += 1;
+                }
+
+                return nextCode.ToString( "D" + NumericLength );
+            }
+            return 1.ToString( "D" + NumericLength );
+        }
+
+        /// <summary>
+        /// Generates a random (security) code.
+        /// </summary>
+        /// <returns>A <see cref="System.String"/> representing the (security) code.</returns>
+        private string GenerateRandomAlphaNumericCode()
+        {
+            StringBuilder sb = new StringBuilder();
+
+            int poolSize = CodeCharacters.Length;
+            for ( int i = 0; i < AlphaNumericLength; i++ )
+            {
+                sb.Append( CodeCharacters[_random.Next( poolSize )] );
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Generates a random (security) code containing only alpha characters.
+        /// </summary>
+        /// <returns>A <see cref="System.String"/> representing the (security) code.</returns>
+        private string GenerateRandomAlphaCode()
+        {
+            StringBuilder sb = new StringBuilder();
+
+            int poolSize = AlphaCharacters.Length;
+            for ( int i = 0; i < AlphaLength; i++ )
+            {
+                sb.Append( AlphaCharacters[_random.Next( poolSize )] );
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Generates a random (security) code containing only numeric characters.
+        /// </summary>
+        /// <returns>A <see cref="System.String"/> representing the (security) code.</returns>
+        private string GenerateRandomNumericCode()
+        {
+            StringBuilder sb = new StringBuilder();
+
+            int poolSize = NumericCharacters.Length;
+            for ( int i = 0; i < NumericLength; i++ )
+            {
+                sb.Append( NumericCharacters[_random.Next( poolSize )] );
+            }
+
+            return sb.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Data Access/Service class for <see cref="Rock.Model.AttendanceCode"/> entity types
+    /// </summary>
+    public partial class AttendanceCodeService
+    {
+        private static readonly object _obj = new object();
+        private static readonly Random _random = new Random( Guid.NewGuid().GetHashCode() );
+        private static DateTime? _today;
+
 
         /// <summary>
         /// A list of <see cref="System.String"/> values that are not allowable as attendance codes.
@@ -113,7 +226,17 @@ namespace Rock.Model
                             .ToList() );
                     }
 
-                    var code = GetNewCode( alphaNumericLength, alphaLength, numericLength, isRandomized );
+                    var codeGenerator = new AttendanceCodeGenerator
+                                        {
+                                            BannedCodes = BannedCodes
+                                          , TodaysCodes = TodaysCodes
+                                          , AlphaNumericLength = alphaNumericLength
+                                          , AlphaLength = alphaLength
+                                          , NumericLength = numericLength
+                                          , IsRandomized = isRandomized
+                                        };
+
+                    var code = GetNewCode( codeGenerator );
 
                     var attendanceCode = new AttendanceCode
                     {
@@ -128,17 +251,8 @@ namespace Rock.Model
             }
         }
 
-        public static string GetNewCode( int alphaNumericLength, int alphaLength, int numericLength, bool isRandomized )
+        public static string GetNewCode( IAttendanceCodeProvider codeGenerator )
         {
-            var lastCode = string.Empty;
-
-            if ( numericLength > 0 && !isRandomized )
-            {
-                lastCode = TodaysCodes.Where( c => c.Length == alphaNumericLength + alphaLength + numericLength )
-                                      .OrderBy( c => c.Substring( alphaNumericLength + alphaLength ) )
-                                      .LastOrDefault();
-            }
-
             var attempts = 0;
             var code = string.Empty;
 
@@ -156,9 +270,7 @@ namespace Rock.Model
                     throw new TimeoutException( "Too many attempts to create a unique attendance code.  There is almost certainly a check-in system 'Security Code Length' configuration problem." );
                 }
 
-                code = GenerateRandomCode( alphaNumericLength )
-                       + GenerateRandomAlphaCode( alphaLength )
-                       + GetNextNumericCodeAsString( alphaNumericLength, alphaLength, numericLength, isRandomized, lastCode );
+                code = codeGenerator.GetCode();
             }
 
             TodaysCodes.Add( code );
@@ -166,97 +278,11 @@ namespace Rock.Model
         }
 
         /// <summary>
-        /// Gets the next numeric code as string.
-        /// </summary>
-        /// <param name="alphaNumericLength">Length of the alpha numeric.</param>
-        /// <param name="alphaLength">Length of the alpha.</param>
-        /// <param name="numericLength">Length of the numeric.</param>
-        /// <param name="isRandomized">if set to <c>true</c> [is randomized].</param>
-        /// <param name="lastCode">The last code.</param>
-        /// <returns></returns>
-        public static string GetNextNumericCodeAsString( int alphaNumericLength, int alphaLength, int numericLength, bool isRandomized, string lastCode )
-        {
-            if ( isRandomized )
-            {
-                return GenerateRandomNumericCode( numericLength );
-            }
-
-            if ( !string.IsNullOrEmpty( lastCode ) )
-            {
-                var maxCode = lastCode.Substring( alphaNumericLength + alphaLength );
-                int nextCode = maxCode.AsInteger() + 1;
-
-                // Cycle through any numbers that include any restricted numbers until an unrestricted one is found
-                while ( BannedCodes.Any( s => nextCode.ToString().Contains( s ) ) )
-                {
-                    nextCode += 1;
-                }
-
-                return nextCode.ToString( "D" + numericLength );
-            }
-            return 1.ToString( "D" + numericLength );
-        }
-
-        /// <summary>
-        /// Generates a random (security) code.
-        /// </summary>
-        /// <param name="length">A <see cref="System.Int32"/> representing the length that the code needs to be.</param>
-        /// <returns>A <see cref="System.String"/> representing the (security) code.</returns>
-        private static string GenerateRandomCode( int length )
-        {
-            StringBuilder sb = new StringBuilder();
-
-            int poolSize = CodeCharacters.Length;
-            for ( int i = 0; i < length; i++ )
-            {
-                sb.Append( CodeCharacters[_random.Next( poolSize )] );
-            }
-
-            return sb.ToString();
-        }
-
-        /// <summary>
-        /// Generates a random (security) code containing only alpha characters.
-        /// </summary>
-        /// <param name="length">A <see cref="System.Int32"/> representing the length that the code needs to be.</param>
-        /// <returns>A <see cref="System.String"/> representing the (security) code.</returns>
-        private static string GenerateRandomAlphaCode( int length )
-        {
-            StringBuilder sb = new StringBuilder();
-
-            int poolSize = AlphaCharacters.Length;
-            for ( int i = 0; i < length; i++ )
-            {
-                sb.Append( AlphaCharacters[_random.Next( poolSize )] );
-            }
-
-            return sb.ToString();
-        }
-
-        /// <summary>
-        /// Generates a random (security) code containing only numeric characters.
-        /// </summary>
-        /// <param name="length">A <see cref="System.Int32"/> representing the length that the code needs to be.</param>
-        /// <returns>A <see cref="System.String"/> representing the (security) code.</returns>
-        private static string GenerateRandomNumericCode( int length )
-        {
-            StringBuilder sb = new StringBuilder();
-
-            int poolSize = NumericCharacters.Length;
-            for ( int i = 0; i < length; i++ )
-            {
-                sb.Append( NumericCharacters[_random.Next( poolSize )] );
-            }
-
-            return sb.ToString();
-        }
-
-        /// <summary>
         /// Clears the list of codes generated today so far.
         /// </summary>
         /// <param name="testing">If set to <c>true</c>, the list will not repopulate from the database before new codes are added.
         /// This will allow an integration test to ignore codes that it did not generate.</param>
-        public static void FlushTodaysCodes(bool testing = false)
+        public static void FlushTodaysCodes( bool testing = false )
         {
             lock ( _obj )
             {
