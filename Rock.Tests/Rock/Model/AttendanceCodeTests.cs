@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using Rock.Data;
 using Rock.Model;
 using Xunit;
 
@@ -7,12 +9,17 @@ namespace Rock.Tests.Rock.Model
 {
     public class AttendanceCodeTests
     {
-        public class TestFunction : IAttendanceCodeProvider
+        #region Mock
+        /// <summary>
+        /// Returns codes from a predefined set rather than generating them randomly
+        /// </summary>
+        /// <seealso cref="IAttendanceCodeProvider" />
+        public class MockAttendanceCodeProvider : IAttendanceCodeProvider
         {
             private readonly string[] _codes;
             private int index = -1;
 
-            public TestFunction( params string[] codes )
+            public MockAttendanceCodeProvider( params string[] codes )
             {
                 _codes = codes;
             }
@@ -23,164 +30,38 @@ namespace Rock.Tests.Rock.Model
                 return _codes[index];
             }
         }
+        #endregion
 
-        #region Alpha-numeric codes
-
-        //[Fact]
-        //public void SkipBanned3DigitCodeAtEndOfAlphaNumericCode()
-        //{
-        //    int alphaNumericLength = 0;
-        //    int alphaLength = 1;
-        //    int numericLength = 3;
-        //    bool isRandomized = false;
-        //    string lastCode = "X665";
-
-        //    string code = AttendanceCodeService.GetNextNumericCodeAsString( alphaNumericLength, alphaLength, numericLength, isRandomized, lastCode );
-        //    Assert.Equal( "667", code.Right( 3 ) );
-        //}
+        #region AttendanceCodeService
 
         /// <summary>
-        /// Verify that three character alpha-numeric codes are all good codes.
+        /// Verify that banned codes get skipped.
         /// </summary>
         [Fact]
         public void SkipBannedCodes()
         {
             AttendanceCodeService.FlushTodaysCodes( true );
             var goodCode = "AB12";
-            var codeGenerator = new TestFunction( AttendanceCodeService.BannedCodes.First(), goodCode );
+            var codeGenerator = new MockAttendanceCodeProvider( AttendanceCodeService.BannedCodes.First(), goodCode );
 
-            var code = AttendanceCodeService.GetNewCode( codeGenerator );
+            var code = AttendanceCodeService.GenerateCode( codeGenerator );
 
             Assert.Equal( goodCode, code );
         }
 
-        #endregion
-
-        #region Numeric only codes
-
-        //[Fact]
-        //public void SkipBanned3DigitCode()
-        //{
-        //    int alphaNumericLength = 0;
-        //    int alphaLength = 0;
-        //    int numericLength = 3;
-        //    bool isRandomized = false;
-        //    string lastCode = "665";
-
-        //    string code = AttendanceCodeService.GetNextNumericCodeAsString( alphaNumericLength, alphaLength, numericLength, isRandomized, lastCode );
-        //    Assert.Equal( "667", code );
-        //}
-
-        //[Fact]
-        //public void SkipBanned3DigitCodeAtEnd()
-        //{
-        //    int alphaNumericLength = 0;
-        //    int alphaLength = 0;
-        //    int numericLength = 4;
-        //    bool isRandomized = false;
-        //    string lastCode = "0665";
-
-        //    string code = AttendanceCodeService.GetNextNumericCodeAsString( alphaNumericLength, alphaLength, numericLength, isRandomized, lastCode );
-        //    Assert.Equal( "0667", code );
-        //}
-
-        //[Fact]
-        //public void SkipBanned3DigitCodeAtBeginning()
-        //{
-        //    int alphaNumericLength = 0;
-        //    int alphaLength = 0;
-        //    int numericLength = 4;
-        //    bool isRandomized = false;
-        //    string lastCode = "6659";
-
-        //    string code = AttendanceCodeService.GetNextNumericCodeAsString( alphaNumericLength, alphaLength, numericLength, isRandomized, lastCode );
-        //    Assert.Equal( "6670", code );
-        //}
-
         /// <summary>
-        /// Checks the three char "002" code.
-        /// </summary>
-        /// TODO: What is this test for?
-        [Fact]
-        public void CheckThreeChar002Code()
-        {
-            AttendanceCodeService.FlushTodaysCodes( true );
-            var codeGenerator = new TestFunction( "001", "002" );
-
-            string code = null;
-            for ( int i = 0; i < 2; i++ )
-            {
-                code = AttendanceCodeService.GetNewCode( codeGenerator );
-            }
-
-            Assert.Equal( "002", code );
-        }
-        
-        /// <summary>
-        /// Numeric only code with length of 2 should not go beyond 99.
-        /// Attempting to create one should not be allowed so throwing a timeout
-        /// exception is acceptable to let the administrator know there is a
-        /// configuration problem.
-        /// </summary>
-        //[Fact]
-        //public void NumericCodeWithLengthOf2ShouldNotGoBeyond99()
-        //{
-        //    try
-        //    {
-        //        AttendanceCodeService.FlushTodaysCodes( true );
-
-        //        for ( int i = 0; i < 101; i++ )
-        //        {
-        //            AttendanceCodeService.GetNewCode( 0, 0, 2, false );
-        //        }
-
-        //        // should not be longer than 2 characters
-        //        // This is a known bug in v7.4 and earlier, and possibly fixed via PR #3071
-        //        var length = AttendanceCodeService.TodaysCodes.Last().Length;
-        //        Assert.True( length == 2, "last code was " + length + " characters long." );
-        //    }
-        //    catch ( TimeoutException )
-        //    {
-        //        // An exception in this case is considered better than hanging (since there is 
-        //        // no actual solution).
-        //        Assert.True( true );
-        //    }
-        //}
-
-        /// <summary>
-        /// Numerics codes should not repeat. There are 996 possible good numeric three character codes.
-        /// </summary>
-        //[Fact]
-        //public void NumericCodesShouldNotRepeat()
-        //{
-        //    AttendanceCodeService.FlushTodaysCodes( true );
-
-        //    for ( int i = 0; i < 996; i++ )
-        //    {
-        //        AttendanceCodeService.GetNewCode( 0, 0, 3, false );
-        //    }
-
-        //    var duplicates = AttendanceCodeService.TodaysCodes.GroupBy( x => x )
-        //                                          .Where( group => group.Count() > 1 )
-        //                                          .Select( group => group.Key )
-        //                                          .ToList();
-
-        //    Assert.True( !duplicates.Any(), "repeated codes: " + string.Join( ", ", duplicates ) );
-        //}
-
-        /// <summary>
-        /// Random numeric codes should not repeat. There are 996 possible good numeric three character codes.
+        /// Verify that duplicate codes will not be generated.
         /// </summary>
         [Fact]
         public void SkipDuplicates()
         {
             AttendanceCodeService.FlushTodaysCodes( true );
-            var codes = new [] { "ABC", "ABC", "DEF", "ABC", "GHI", "DEF" };
-            var codeGenerator = new TestFunction( codes );
+            var codes = new[] { "ABC", "ABC", "DEF", "ABC", "GHI", "DEF" };
+            var codeGenerator = new MockAttendanceCodeProvider( codes );
 
-            for ( int i = 0; i < codes.Distinct().Count(); i++ )
+            for ( var i = 0; i < codes.Distinct().Count(); i++ )
             {
-                AttendanceCodeService.GetNewCode( codeGenerator );
+                AttendanceCodeService.GenerateCode( codeGenerator );
             }
 
             var duplicates = AttendanceCodeService.TodaysCodes.GroupBy( x => x )
@@ -192,6 +73,269 @@ namespace Rock.Tests.Rock.Model
             Assert.True( !duplicates.Any(), "repeated codes: " + string.Join( ", ", duplicates ) );
         }
 
+        #endregion
+
+        #region AttendanceCodeGenerator
+
+        [Fact]
+        public void AlphaNumericLength()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 5
+                                                       , alphaLength: 0
+                                                       , numericLength: 0
+                                                       , isRandomized: false);
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( 5, code.Length );
+        }
+
+        [Fact]
+        public void AlphaLength()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 5
+                                                       , numericLength: 0
+                                                       , isRandomized: false );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( 5, code.Length );
+        }
+
+        [Fact]
+        public void NumericLength()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 0
+                                                       , numericLength: 5
+                                                       , isRandomized: false );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( 5, code.Length );
+        }
+
+        [Fact]
+        public void AlphaNumericAlphaLength()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 2
+                                                       , alphaLength: 2
+                                                       , numericLength: 0
+                                                       , isRandomized: false );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( 4, code.Length );
+        }
+
+        [Fact]
+        public void AlphaNumericNumericLength()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 2
+                                                       , alphaLength: 0
+                                                       , numericLength: 2
+                                                       , isRandomized: false );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( 4, code.Length );
+        }
+
+        [Fact]
+        public void AlphaThenNumericLength()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 2
+                                                       , numericLength: 2
+                                                       , isRandomized: false );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( 4, code.Length );
+        }
+
+        [Fact]
+        public void AlphaNumericThenAlphaThenNumericLength()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 2
+                                                       , alphaLength: 2
+                                                       , numericLength: 2
+                                                       , isRandomized: false );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( 6, code.Length );
+        }
+
+        [Fact]
+        public void SkipBanned3DigitCode()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 0
+                                                       , numericLength: 3
+                                                       , isRandomized: false
+                                                       , bannedCodes: new List<string> { "666" }
+                                                       , todaysCodes: new List<string> { "665" } );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( "667", code );
+        }
+
+        [Fact]
+        public void SkipBannedNumericCodeAtEndOfAlphaNumericCode()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 1
+                                                       , numericLength: 3
+                                                       , isRandomized: false
+                                                       , bannedCodes: new List<string> { "666" }
+                                                       , todaysCodes: new List<string> { "X665" } );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( "667", code.Right( 3 ) );
+        }
+
+        [Fact]
+        public void SkipBannedNumericCodeAtEndOfNumericCode()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 0
+                                                       , numericLength: 4
+                                                       , isRandomized: false
+                                                       , bannedCodes: new List<string> { "666" }
+                                                       , todaysCodes: new List<string> { "0665" } );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( "0667", code );
+        }
+
+        [Fact]
+        public void SkipBanned3DigitCodeAtBeginning()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 0
+                                                       , numericLength: 4
+                                                       , isRandomized: false
+                                                       , bannedCodes: new List<string> { "666" }
+                                                       , todaysCodes: new List<string> { "6659" } );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( "6670", code );
+        }
+
+        [Fact]
+        public void NumericCodeShouldCycle()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 0
+                                                       , numericLength: 4
+                                                       , isRandomized: false
+                                                       , todaysCodes: new List<string> { "9999" } );
+
+            // Act
+            var code = generator.GetCode();
+
+            // Assert
+            Assert.Equal( "0000", code );
+        }
+
+        [Fact]
+        public void NumericCodeShouldCycle2()
+        {
+            // Arrange
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 0
+                                                       , numericLength: 4
+                                                       , isRandomized: false
+                                                       , todaysCodes: new List<string> { "9999" } );
+
+            // Act
+            var code1 = generator.GetCode();
+            var code2 = generator.GetCode();
+            var code3 = generator.GetCode();
+
+            // Assert
+            Assert.Equal( "0000", code1 );
+            Assert.Equal( "0001", code2 );
+            Assert.Equal( "0002", code3 );
+        }
+
+        /// <summary>
+        /// Numeric only code with length of 2 should not go beyond 99.
+        /// Attempting to create one should not be allowed so throwing a timeout
+        /// exception is acceptable to let the administrator know there is a
+        /// configuration problem.
+        /// </summary>
+        [Fact]
+        public void NumericCodeWithLengthOf2ShouldNotGoBeyond99()
+        {
+            try
+            {
+                // Arrange
+                var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                           , alphaLength: 0
+                                                           , numericLength: 2
+                                                           , isRandomized: false );
+
+                // Act
+                var code = string.Empty;
+                for ( int i = 0; i < 100; i++ )
+                {
+                    code = generator.GetCode();
+                }
+
+                // Assert
+
+                // should not be longer than 2 characters
+                Assert.True( code.Length == 2, "last code was " + code );
+            }
+            catch ( TimeoutException )
+            {
+                // An exception in this case is considered better than hanging (since there is 
+                // no actual solution).
+                Assert.True( true );
+            }
+        }
+
         /// <summary>
         /// Requestings the more codes than are possible should throw exception...
         /// because there's really nothing else we could do in that situation, right?
@@ -199,147 +343,109 @@ namespace Rock.Tests.Rock.Model
         /// NOTE: This test has a special setup using an async task so that we can break
         /// out if the underlying Rock service call is hung in an infinite loop.
         /// </summary>
-        //[Fact]
-        //public void RequestingMoreCodesThanPossibleShouldThrowException()
-        //{
-        //    AttendanceCodeService.FlushTodaysCodes( true );
+        [Fact]
+        public void RequestingMoreCodesThanPossibleShouldThrowException()
+        {
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 0
+                                                       , numericLength: 2
+                                                       , isRandomized: false );
 
-        //    // Generate 99 codes (the maximum number of valid codes).
-        //    for ( int i = 0; i < 100; i++ )
-        //    {
-        //        AttendanceCodeService.GetNewCode( 0, 0, 2, true );
-        //    }
+            // Generate 99 codes (the maximum number of valid codes).
+            for ( int i = 0; i < 100; i++ )
+            {
+                generator.GetCode();
+            }
 
-        //    // Now try to generate one more... which should NOT hang but instead, may
-        //    // throw one of two exceptions.
-        //    try
-        //    {
-        //        AttendanceCodeService.GetNewCode( 0, 0, 2, true );
-        //    }
-        //    catch ( InvalidOperationException )
-        //    {
-        //        Assert.True( true );
-        //    }
-        //    catch ( TimeoutException )
-        //    {
-        //        // An exception in this case is considered better than hanging (since there is 
-        //        // no actual solution).
-        //        Assert.True( true );
-        //    }
-        //}
+            // Now try to generate one more... which should NOT hang but instead, may
+            // throw one of two exceptions.
+            try
+            {
+                generator.GetCode();
+            }
+            catch ( InvalidOperationException )
+            {
+                Assert.True( true );
+            }
+            catch ( TimeoutException )
+            {
+                // An exception in this case is considered better than hanging (since there is 
+                // no actual solution).
+                Assert.True( true );
+            }
+        }
 
         /// <summary>
         /// Sequentially increment three-character numeric codes to 100 and verify "100".
         /// </summary>
-        //[Fact]
-        //public void Increment100SequentialNumericCodes()
-        //{
-        //    AttendanceCodeService.FlushTodaysCodes( true );
+        [Fact]
+        public void Increment100SequentialNumericCodes()
+        {
+            var generator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                       , alphaLength: 0
+                                                       , numericLength: 3
+                                                       , isRandomized: false );
 
-        //    string code = null;
-        //    for ( int i = 0; i < 100; i++ )
-        //    {
-        //        code = AttendanceCodeService.GetNewCode( 0, 0, 3, false );
-        //    }
+            string code = null;
+            for ( int i = 0; i < 100; i++ )
+            {
+                code = generator.GetCode();
+            }
 
-        //    Assert.Equal( "100", code );
-        //}
-
-        #endregion
-
-        #region Alpha-numeric + numeric only codes
-
-        /// <summary>
-        /// Two character alpha numeric codes (AttendanceCodeService.codeCharacters) has possible
-        /// 24*24 (576) combinations plus two character numeric codes has a possible 10*10 (100)
-        /// for a total set of 676 combinations.  Removing the noGood (~60) codes leaves us with
-        /// a valid set of about 616 codes.
-        /// 
-        /// NOTE: This appears to be a possible bug in v8.0 and earlier. The AttendanceCodeService
-        /// service will only generate 100 codes when trying to combine the numeric parameter of "2" with
-        /// the other parameters.
-        ///
-        /// Even when run with 2 alpha numeric and 3 numeric, this test should verify that codes
-        /// such as X6662, 99119, 66600 do not occur.
-        /// 
-        /// There should be no bad codes in the generated AttendanceCodeService.TodaysCodes -- even though
-        /// individually each part has no bad codes.  For example, "A6" + "66" should
-        /// not appear since combined it would be "A666".
-        /// </summary>
-        /// TODO: This is a function that was created to test the thing we're fixing. Is there a better way to test this?
-        //[Fact]
-        //public void AlphaNumericWithNumericCodesShouldSkipBadCodes()
-        //{
-        //    AttendanceCodeService.FlushTodaysCodes( true );
-
-        //    int attemptCombination = 0;
-
-        //    try
-        //    {
-        //        for ( int i = 0; i < 600; i++ )
-        //        {
-        //            attemptCombination = i;
-        //            AttendanceCodeService.GetNewCode( 2, 0, 3, true );
-        //        }
-
-        //        var matches = AttendanceCodeService.TodaysCodes.Where( c => AttendanceCodeService.BannedCodes.Any( c.Contains ) ).ToList();
-        //        bool hasMatchIsBad = matches.Any();
-
-        //        Assert.False( hasMatchIsBad, "bad codes were: " + string.Join( ", ", matches ) );
-        //    }
-        //    catch ( TimeoutException )
-        //    {
-        //        // If an infinite loop was detected, but we tried at least 600 codes then
-        //        // we'll consider this a pass.
-        //        Assert.True( attemptCombination >= 600 );
-        //    }
-        //}
+            Assert.Equal( "100", code );
+        }
 
         #endregion
 
-        #region Alpha only + numeric only codes
+        #region AttendanceCodeService and AttendanceCodeGenerator in conjunction
+
+        // These will test how the two classes work together for scenarios that cannot be tested individually 
 
         /// <summary>
-        /// This is the configuration that churches like Central Christian Church use for thier
-        /// Children's check-in.
+        /// Verify that incrementing to a number that has already been used will continue incrementing properly
         /// </summary>
-        //[Fact]
-        //public void TwoAlphaWithFourRandomNumericCodesShouldSkipBadCodes()
-        //{
-        //    AttendanceCodeService.FlushTodaysCodes( true );
+        [Fact]
+        public void SkipDuplicatesWhileIncrementing()
+        {
+            AttendanceCodeService.FlushTodaysCodes( true );
+            AttendanceCodeService.TodaysCodes.Add( "0000" );
+            AttendanceCodeService.TodaysCodes.Add( "9999" );
+            var codeGenerator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                           , alphaLength: 0
+                                                           , numericLength: 4
+                                                           , isRandomized: false
+                                                           , todaysCodes: new List<string> { "0000", "9999" } );
 
-        //    for ( int i = 0; i < 2500; i++ )
-        //    {
-        //        AttendanceCodeService.GetNewCode( 0, 2, 4, true );
-        //    }
+            var code = AttendanceCodeService.GenerateCode( codeGenerator );
 
-        //    var matches = AttendanceCodeService.TodaysCodes.Where( c => AttendanceCodeService.BannedCodes.Any( ng => c.Contains( ng ) ) ).ToList();
-
-        //    bool hasMatchIsBad = matches.Any();
-
-        //    Assert.False( hasMatchIsBad, "bad codes were: " + string.Join( ", ", matches ) );
-        //}
+            Assert.Equal( "0001", code );
+        }
 
         /// <summary>
-        /// Codes containing parts combined into noGood codes, such as "P" + "55",
-        /// should not occur.
+        /// Verify that banned codes get skipped when the individual parts are not banned but the resulting code is.
+        /// This should not increment the number since the number itself is not banned.
         /// </summary>
-        //[Fact]
-        //public void AlphaOnlyWithNumericOnlyCodesShouldSkipBadCodes()
-        //{
-        //    AttendanceCodeService.FlushTodaysCodes( true );
+        [Fact]
+        public void SkipBannedCombinedCodes()
+        {
+            var originalBannedCodes = AttendanceCodeService.BannedCodes.ToList();
+            //var banThese = AttendanceCodeGenerator.AlphaCharacters.Where( c => c != 'Z' ).Select( c => c.ToString() + "1" ); // B1, C1, D1, etc. excluding Z1
+            var banThese = AttendanceCodeGenerator.AlphaCharacters.Select( c => c.ToString() + "1" ); // B1, C1, D1, etc.
+            AttendanceCodeService.BannedCodes.AddRange( banThese );
+            AttendanceCodeService.FlushTodaysCodes( true );
+            var codeGenerator = new AttendanceCodeGenerator( alphaNumericLength: 0
+                                                           , alphaLength: 1
+                                                           , numericLength: 1
+                                                           , isRandomized: false );
 
-        //    AttendanceCode code = null;
-        //    for ( int i = 0; i < 6000; i++ )
-        //    {
-        //        AttendanceCodeService.GetNewCode( 0, 1, 4, true );
-        //    }
+            var code = AttendanceCodeService.GenerateCode( codeGenerator );
 
-        //    var matches = AttendanceCodeService.TodaysCodes.Where( c => AttendanceCodeService.BannedCodes.Any( ng => c.Contains( ng ) ) ).ToList();
-        //    bool hasMatchIsBad = matches.Any();
+            // Reset the banned codes before asserting so a failure won't prevent cleanup
+            AttendanceCodeService.BannedCodes = originalBannedCodes;
 
-        //    Assert.False( hasMatchIsBad, "bad codes were: " + string.Join( ", ", matches ) );
-        //}
+            //Assert.Equal( "Z1", code );
+            Assert.Equal( "2", code.Right( 1 ) );
+        }
 
         #endregion
     }
