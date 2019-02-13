@@ -4,9 +4,6 @@
     <ContentTemplate>
 
         <asp:Panel ID="pnlView" runat="server" CssClass="panel panel-block">
-            <Rock:HiddenFieldWithClass ID="hfResponseToken" runat="server" CssClass="js-response-token" />
-            <Rock:HiddenFieldWithClass ID="hfEnabledTypes" runat="server" CssClass="js-enabled-payment-types" />
-
             <div class="panel-heading">
                 <h1 class="panel-title">
                     <i class="fa fa-star"></i>
@@ -17,86 +14,74 @@
             <div class="panel-body">
                 <div class="row">
                     <div class="col-md-8">
-                        <h1>Configure ACH/CC</h1>
-                        <label>Gateway Config Attributes</label>
-                        <Rock:RockTextBox ID="tbApiKey" runat="server" Label="Private API Key" Text="" Help="This would be a Gateway Config Attribute" />
-
-                        <Rock:RockCheckBox ID="cbCreditCard" runat="server" Label="Credit Card" Checked="true" AutoPostBack="true" OnCheckedChanged="cbCreditCard_CheckedChanged" />
-                        <Rock:RockCheckBox ID="cbAch" runat="server" Label="ACH" Checked="false" AutoPostBack="true" OnCheckedChanged="cbCreditCard_CheckedChanged" />
-
                         <h1>Get Amount</h1>
-                        <Rock:CurrencyBox ID="cbAmount" runat="server" Text="45.55" />
+                        <Rock:CampusAccountAmountPicker ID="caapAccountInfo" runat="server" AmountEntryMode="SingleAccount" />
 
                         <hr />
 
-                        <h1>Get Token</h1>
-
-                        <input type="text" class="js-input-style-hook" style="display: none" />
-                        <div id="gatewayIFrameContainer" class="margin-b-md" runat="server" style="border-color: red; border-style: solid; border-width: 1px"></div>
-
-                        <span class="btn btn-primary btn-sm" onclick='submitTokenizer()'>Get Token</span>
-                        <div class="">
-
-                            <span class="control-label">Token Response</span>
-                            <textarea class='js-response code' rows="5" cols="80" style="font-family: Courier New, Courier, monospace"></textarea>
+                        <h1>Hosted Payment Control</h1>
+                        <div style="border-width: thick; border-color: red; border-style: solid;" class="margin-b-md">
+                            <Rock:DynamicPlaceholder ID="phHostedPaymentControl" runat="server" />
                         </div>
+
+                        <span class="btn btn-primary btn-sm" runat="server" id="btnSubmitPaymentInfo" onclick='submitTokenizer()'>Get Token</span>
 
                         <hr />
                         <Rock:NotificationBox ID="wbToken" runat="server" NotificationBoxType="Warning" Text="Note that Tokens can only be used once. (You'll get an 'Internal Server Error' if you use it more than once)." />
 
-                        <h1>Create Plan</h1>
-                        <Rock:RockTextBox ID="tbPlanName" runat="server" Label="Plan Name" Text="test plan" />
-                        <Rock:RockTextBox ID="tbPlanDescription" runat="server" Label="Plan Description" Text="test plan description" />
-                        <Rock:NumberBox ID="tbPlanAmount" runat="server" Label="Plan Amount" Text="1.00" NumberType="Currency" />
-                        <Rock:NumberBox ID="tbPlanBillingCycleInterval" runat="server" Label="Plan billing_cycle_interval" Help="How often to run the billing cycle. Run every x months" />
-                        <Rock:RockDropDownList ID="ddlPlanBillingFrequency" runat="server" Label="Plan billing_frequency" Help="How often run within a billing cycle. (monthly, twice_monthly, ??)">
-                            <asp:ListItem Text="monthly" />
-                            <asp:ListItem Text="twice_monthly" />
-                        </Rock:RockDropDownList>
-                        <Rock:RockTextBox ID="tbPlanBillingDays" runat="server" Label="Plan billing_days" Help="Which day to bill on. If twice_monthly, then comma separate dates" />
-                        <asp:LinkButton ID="btnCreatePlan" runat="server" CssClass="btn btn-primary" OnClick="btnCreatePlan_Click" Text="Create Plan" />
-                        <Rock:RockTextBox ID="tbCreatePlanResponse_PlanID" runat="server" Label="Plan Id" />
-                        <Rock:CodeEditor ID="ceCreatePlanResponse" runat="server" EditorMode="JavaScript" Label="Plan Response" EditorHeight="200" />
+                        <asp:Panel ID="pnlHideStuff" runat="server" Visible="false">
+                            <h1>Create Plan</h1>
+                            <Rock:RockTextBox ID="tbPlanName" runat="server" Label="Plan Name" Text="test plan" />
+                            <Rock:RockTextBox ID="tbPlanDescription" runat="server" Label="Plan Description" Text="test plan description" />
+                            <Rock:NumberBox ID="tbPlanAmount" runat="server" Label="Plan Amount" Text="1.00" NumberType="Currency" />
+                            <Rock:NumberBox ID="tbPlanBillingCycleInterval" runat="server" Label="Plan billing_cycle_interval" Help="How often to run the billing cycle. Run every x months" />
+                            <Rock:RockDropDownList ID="ddlPlanBillingFrequency" runat="server" Label="Plan billing_frequency" Help="How often run within a billing cycle. (monthly, twice_monthly, ??)">
+                                <asp:ListItem Text="monthly" />
+                                <asp:ListItem Text="twice_monthly" />
+                            </Rock:RockDropDownList>
+                            <Rock:RockTextBox ID="tbPlanBillingDays" runat="server" Label="Plan billing_days" Help="Which day to bill on. If twice_monthly, then comma separate dates" />
+                            <asp:LinkButton ID="btnCreatePlan" runat="server" CssClass="btn btn-primary" OnClick="btnCreatePlan_Click" Text="Create Plan" />
+                            <Rock:RockTextBox ID="tbCreatePlanResponse_PlanID" runat="server" Label="Plan Id" />
+                            <Rock:CodeEditor ID="ceCreatePlanResponse" runat="server" EditorMode="JavaScript" Label="Plan Response" EditorHeight="200" />
 
 
-                        <h1>Get Plans</h1>
-                        <asp:LinkButton ID="btnGetPlans" runat="server" CssClass="btn btn-primary" OnClick="btnGetPlans_Click" Text="Get Plans" />
-                        <Rock:CodeEditor ID="ceGetPlansResponse" runat="server" EditorMode="JavaScript" Label="Plans Response" EditorHeight="400" />
+                            <h1>Get Plans</h1>
+                            <asp:LinkButton ID="btnGetPlans" runat="server" CssClass="btn btn-primary" OnClick="btnGetPlans_Click" Text="Get Plans" />
+                            <Rock:CodeEditor ID="ceGetPlansResponse" runat="server" EditorMode="JavaScript" Label="Plans Response" EditorHeight="400" />
 
-                        <h1>Create Customer</h1>
+
+                            <h1>Create Subscription</h1>
+                            <Rock:RockTextBox ID="tbSubscriptionCustomerId" runat="server" Label="Customer.Id" Help="Customer ID to bill" />
+                            <Rock:RockTextBox ID="tbSubscriptionDescription" runat="server" Label="Subscription Description" Text="test Subscription description" />
+                            <Rock:RockTextBox ID="tbPlanId" runat="server" Label="Plan Id (Template)" Help="Plan ID to reference as a template" />
+
+                            <Rock:NotificationBox ID="nbSubscriptionPlanOverrides" runat="server" Text="Leave Amount, billing_cycle_interval, billing_frequency and/or billing_days blank to use Plan defaults" />
+                            <Rock:NumberBox ID="tbSubscriptionAmount" runat="server" Label="Subscription Amount" Text="2.00" NumberType="Currency" />
+                            <Rock:NumberBox ID="tbSubscriptionBillingCycleInterval" runat="server" Label="Subscription billing_cycle_interval" Help="How often to run the billing cycle. Run every x months" />
+                            <Rock:RockDropDownList ID="ddlSubscriptionBillingFrequency" runat="server" Label="Subscription billing_frequency" Help="How often run within a billing cycle. (monthly, twice_monthly, ??)">
+                                <asp:ListItem Text="(use plan default)" />
+                                <asp:ListItem Text="monthly" />
+                                <asp:ListItem Text="twice_monthly" />
+                            </Rock:RockDropDownList>
+                            <Rock:RockTextBox ID="tbSubscriptionBillingDays" runat="server" Label="Subscription billing_days" Help="Which day to bill on. If twice_monthly, then comma separate dates" />
+                            <Rock:NumberBox ID="nbSubscriptionDuration" runat="server" Label="Subscription duration" Help="(No Documention)" />
+                            <Rock:RockTextBox ID="tbSubscriptionNextBillDate" runat="server" Label="Subscription next_bill_date" Help="(No Documention). Appears to be first date of the recurring payment and what the recurring schedule it based upon in YYYY-MM-DD format." Text="2019-3-1" />
+                            <asp:LinkButton ID="btnCreateSubscription" runat="server" CssClass="btn btn-primary" OnClick="btnCreateSubscription_Click" Text="Create Subscription" />
+                            <Rock:RockTextBox ID="tbCreateSubscriptionResponse_SubscriptionId" runat="server" Label="Subscription Id" />
+                            <Rock:CodeEditor ID="ceCreateSubscriptionResponse" runat="server" EditorMode="JavaScript" Label="Create Subscription Response" EditorHeight="400" />
+
+                            <h1>Get Customer Transaction Statuses</h1>
+                            <asp:LinkButton ID="btnGetCustomerTransactionStatus" runat="server" CssClass="btn btn-primary" OnClick="btnGetCustomerTransactionStatus_Click" Text="Query Transactions" />
+                            <Rock:CodeEditor ID="ceQueryTransactionStatus" runat="server" EditorMode="JavaScript" Label="CustomerTransactionStatus Response" EditorHeight="400" />
+                        </asp:Panel>
+
+
+                        <h1>Customer (Billing Information)</h1>
                         <Rock:RockTextBox ID="tbFirstName" runat="server" Label="First Name" />
                         <Rock:RockTextBox ID="tbLastName" runat="server" Label="Last Name" />
                         <Rock:AddressControl ID="acAddress" runat="server" UseStateAbbreviation="true" UseCountryAbbreviation="false" Label="Address" />
                         <Rock:PhoneNumberBox ID="pnbPhone" runat="server" Label="Phone" />
                         <Rock:EmailBox ID="tbEmail" runat="server" Label="Email" />
-
-                        <asp:LinkButton ID="btnCreateCustomer" runat="server" CssClass="btn btn-primary" Text="Create Customer" OnClick="btnCreateCustomer_Click" />
-                        <Rock:CodeEditor ID="ceCreateCustomerResponse" runat="server" EditorMode="JavaScript" Label="Create Customer Response" EditorHeight="100" />
-                        <Rock:RockTextBox ID="tbCustomerId" runat="server" Label="Customer Id" Text="bhd11gperttu4lo33m1g" />
-
-                        <h1>Create Subscription</h1>
-                        <Rock:RockTextBox ID="tbSubscriptionCustomerId" runat="server" Label="Customer.Id" Help="Customer ID to bill" />
-                        <Rock:RockTextBox ID="tbSubscriptionDescription" runat="server" Label="Subscription Description" Text="test Subscription description" />
-                        <Rock:RockTextBox ID="tbPlanId" runat="server" Label="Plan Id (Template)" Help="Plan ID to reference as a template" />
-
-                        <Rock:NotificationBox ID="nbSubscriptionPlanOverrides" runat="server" Text="Leave Amount, billing_cycle_interval, billing_frequency and/or billing_days blank to use Plan defaults" />
-                        <Rock:NumberBox ID="tbSubscriptionAmount" runat="server" Label="Subscription Amount" Text="2.00" NumberType="Currency" />
-                        <Rock:NumberBox ID="tbSubscriptionBillingCycleInterval" runat="server" Label="Subscription billing_cycle_interval" Help="How often to run the billing cycle. Run every x months" />
-                        <Rock:RockDropDownList ID="ddlSubscriptionBillingFrequency" runat="server" Label="Subscription billing_frequency" Help="How often run within a billing cycle. (monthly, twice_monthly, ??)">
-                            <asp:ListItem Text="(use plan default)" />
-                            <asp:ListItem Text="monthly" />
-                            <asp:ListItem Text="twice_monthly" />
-                        </Rock:RockDropDownList>
-                        <Rock:RockTextBox ID="tbSubscriptionBillingDays" runat="server" Label="Subscription billing_days" Help="Which day to bill on. If twice_monthly, then comma separate dates" />
-                        <Rock:NumberBox ID="nbSubscriptionDuration" runat="server" Label="Subscription duration" Help="(No Documention)" />
-                        <Rock:RockTextBox ID="tbSubscriptionNextBillDate" runat="server" Label="Subscription next_bill_date" Help="(No Documention). Appears to be first date of the recurring payment and what the recurring schedule it based upon in YYYY-MM-DD format." Text="2019-3-1" />
-                        <asp:LinkButton ID="btnCreateSubscription" runat="server" CssClass="btn btn-primary" OnClick="btnCreateSubscription_Click" Text="Create Subscription" />
-                        <Rock:RockTextBox ID="tbCreateSubscriptionResponse_SubscriptionId" runat="server" Label="Subscription Id" />
-                        <Rock:CodeEditor ID="ceCreateSubscriptionResponse" runat="server" EditorMode="JavaScript" Label="Create Subscription Response" EditorHeight="400" />
-
-                        <h1>Get Customer Transaction Statuses</h1>
-                        <asp:LinkButton ID="btnGetCustomerTransactionStatus" runat="server" CssClass="btn btn-primary" OnClick="btnGetCustomerTransactionStatus_Click" Text="Query Transactions"/>
-                        <Rock:CodeEditor ID="ceQueryTransactionStatus" runat="server" EditorMode="JavaScript" Label="CustomerTransactionStatus Response" EditorHeight="400" />
 
                         <h1>Process One-Time Sale</h1>
                         <asp:LinkButton ID="btnProcessSale" runat="server" CssClass="btn btn-primary" Text="Process Sale" OnClick="btnProcessSale_Click" />
@@ -184,75 +169,6 @@
             </div>
 
         </asp:Panel>
-
-        <script type="text/javascript">
-
-            var gatewayTokenizer;
-
-            Sys.Application.add_load(function () {
-                initializeTokenizer();
-            });
-
-            function initializeTokenizer() {
-
-                var enabledPaymentTypes = JSON.parse($('.js-enabled-payment-types').val());;
-
-                var $container = $('#<%=this.gatewayIFrameContainer.ClientID%>');
-
-                var containerStyles = function (style) {
-                    return $container.css(style);
-                };
-                var inputStyles = function (style) {
-                    return $('.js-input-style-hook').css(style)
-                };
-
-                // create PI Gateway Tokenizer object
-                gatewayTokenizer = new Tokenizer({
-                    apikey: 'pub_1GVPn38YIiwClnuINKPc7uIB42A',
-                    url: 'https://sandbox.gotnpgateway.com', // workaround for possible issue
-                    container: $container[0],
-                    submission: (resp) => {
-                        debugger
-                        $('.js-response-token').val(resp.token);
-                        $('.js-response').val(JSON.stringify(resp, null, 2));
-                    },
-                    settings: {
-                        payment: {
-                            types: enabledPaymentTypes,
-                            ach: {
-                                sec_code: 'web' // Default web - web, ccd, ppd, tel
-                            }
-                        },
-                        // Styles object will get converted into a css style sheet.
-                        // Inspect elements to see structured html elements
-                        // and style them the same way you would in css.
-                        styles: {
-                            'body': {
-                                'color': containerStyles('color')
-                            },
-                            'input': {
-                                'color': inputStyles('color'),
-                                'border-radius': inputStyles('border-radius'),
-                                'background-color': inputStyles('background-color'),
-                                'border': inputStyles('border')
-                            },
-                            '.payment .cvv input': {
-                                'border': inputStyles('border'),
-                                'padding-left': inputStyles('padding-left')
-                            }
-                        }
-                    }
-                })
-
-                // Initiate creation on container element
-                gatewayTokenizer.create();
-            }
-
-            // Tells the gatewayTokenizer to submit the entered info so that we can get a token (or error, etc) in the response
-            function submitTokenizer() {
-                gatewayTokenizer.submit() // Use submission callback to deal with response
-            }
-        </script>
 
     </ContentTemplate>
 </asp:UpdatePanel>

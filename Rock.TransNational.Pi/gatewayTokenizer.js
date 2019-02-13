@@ -1,7 +1,5 @@
 ﻿function initializeTokenizer(controlId) {
 
-    debugger
-
     var $control = $('#' + controlId)
 
     var enabledPaymentTypes = JSON.parse($('.js-enabled-payment-types', $control).val());;

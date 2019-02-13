@@ -15,12 +15,13 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Web.UI;
 using Newtonsoft.Json;
 using Rock;
+using Rock.Attribute;
+using Rock.Data;
 using Rock.Financial;
 using Rock.Model;
 using Rock.Web.UI;
@@ -36,12 +37,41 @@ namespace RockWeb.Blocks.Finance
 
     #region Block Attributes
 
+    [FinancialGatewayField(
+        "Financial Gateway",
+        Key = AttributeKey.FinancialGateway,
+        Description = "The payment gateway to use for Credit Card and ACH transactions.",
+        Order = 0 )]
+
+    [BooleanField(
+        "Enable ACH",
+        Key = AttributeKey.EnableACH,
+        Order = 1 )]
+
+    [AccountsField(
+        "Accounts",
+        Key = AttributeKey.AccountsToDisplay,
+        Description = "The accounts to display. By default all active accounts with a Public Name will be displayed. If the account has a child account for the selected campus, the child account for that campus will be used.",
+        Order = 2 )]
     #endregion Block Attributes
 
     public partial class TestPiGateway : RockBlock
     {
+        #region Attribute Keys
 
-        #region Base Control Methods
+        /// <summary>
+        /// Keys to use for Block Attributes
+        /// </summary>
+        protected static class AttributeKey
+        {
+            public const string FinancialGateway = "FinancialGateway";
+            public const string EnableACH = "EnableACH";
+            public const string AccountsToDisplay = "AccountsToDisplay";
+        }
+
+        #endregion Attribute Keys
+
+        Control _hostedPaymentInfoControl;
 
         //  overrides of the base RockBlock methods (i.e. OnInit, OnLoad)
 
@@ -53,12 +83,30 @@ namespace RockWeb.Blocks.Finance
         {
             base.OnInit( e );
 
-            // this event gets fired after block settings are updated. it's nice to repaint the screen if these settings would alter it
-            this.BlockUpdated += Block_BlockUpdated;
-            this.AddConfigurationUpdateTrigger( upnlContent );
+            var gatewayComponent = GetFinancialGatewayComponent();
+            var gateway = GetFinancialGateway();
+            this.BlockUpdated += TestPiGateway_BlockUpdated;
 
-            var gateway = new Rock.TransNational.Pi.PiGateway();
-            gateway.InitializeBlock( this, this.gatewayIFrameContainer );
+            bool enableACH = this.GetAttributeValue( AttributeKey.EnableACH ).AsBoolean();
+            if ( gatewayComponent != null )
+            {
+                _hostedPaymentInfoControl = gatewayComponent.GetHostedPaymentInfoControl( gateway, enableACH, "_hostedPaymentInfoControl" );
+                phHostedPaymentControl.Controls.Add( _hostedPaymentInfoControl );
+                var submitScript = gatewayComponent.GetHostPaymentInfoSubmitScript( gateway, _hostedPaymentInfoControl );
+
+                btnSubmitPaymentInfo.Attributes["onclick"] = submitScript;
+            }
+
+            var rockContext = new RockContext();
+            var selectableAccountIds = new FinancialAccountService( rockContext ).GetByGuids( this.GetAttributeValues( AttributeKey.AccountsToDisplay ).AsGuidList() ).Select( a => a.Id ).ToArray();
+
+            caapAccountInfo.SelectableAccountIds = selectableAccountIds;
+        }
+
+        private void TestPiGateway_BlockUpdated( object sender, EventArgs e )
+        {
+            // reload whole page instead of doing a partial when block config changes
+            NavigateToCurrentPageReference();
         }
 
         /// <summary>
@@ -68,68 +116,89 @@ namespace RockWeb.Blocks.Finance
         protected override void OnLoad( EventArgs e )
         {
             base.OnLoad( e );
-
-            if ( !Page.IsPostBack )
-            {
-                tbApiKey.Text = this.GetBlockUserPreference( "APIKey" );
-                SetEnabledPaymentTypes();
-            }
         }
 
-        #endregion
-
-        #region Events
+        private Rock.Model.FinancialGateway _financialGateway = null;
 
         /// <summary>
-        /// Handles the BlockUpdated event of the control.
+        /// Gets the financial gateway (model) that is configured for this block
         /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        protected void Block_BlockUpdated( object sender, EventArgs e )
+        /// <returns></returns>
+        private Rock.Model.FinancialGateway GetFinancialGateway()
         {
-
-        }
-
-        #endregion
-
-        #region Methods
-
-        #endregion
-
-        public void SetEnabledPaymentTypes()
-        {
-            List<string> enabledPaymentTypes = new List<string>();
-            if ( cbCreditCard.Checked )
+            if ( _financialGateway == null )
             {
-                enabledPaymentTypes.Add( "card" );
+                RockContext rockContext = new RockContext();
+                var financialGatewayGuid = this.GetAttributeValue( AttributeKey.FinancialGateway ).AsGuid();
+                _financialGateway = new FinancialGatewayService( rockContext ).GetNoTracking( financialGatewayGuid );
             }
 
-            if ( cbAch.Checked )
-            {
-                enabledPaymentTypes.Add( "ach" );
-            }
-
-            hfEnabledTypes.Value = enabledPaymentTypes.ToJson();
+            return _financialGateway;
         }
 
-        protected void cbCreditCard_CheckedChanged( object sender, EventArgs e )
+
+        private IHostedGatewayComponent _financialGatewayComponent = null;
+
+        /// <summary>
+        /// Gets the financial gateway component that is configured for this block
+        /// </summary>
+        /// <returns></returns>
+        private IHostedGatewayComponent GetFinancialGatewayComponent()
         {
-            SetEnabledPaymentTypes();
+            if ( _financialGatewayComponent == null )
+            {
+                var financialGateway = GetFinancialGateway();
+                if ( financialGateway != null )
+                {
+                    _financialGatewayComponent = financialGateway.GetGatewayComponent() as IHostedGatewayComponent;
+                }
+            }
+
+            return _financialGatewayComponent;
         }
 
         /// <summary>
         /// Handles the Click event of the btnProcessSale control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void btnProcessSale_Click( object sender, EventArgs e )
         {
-            var gateway = new Rock.TransNational.Pi.PiGateway();
-            var apiKey = tbApiKey.Text;
-            var amount = cbAmount.Text.AsDecimal();
-            var customerId = tbCustomerId.Text;
-            var transactionResponse = gateway.PostTransaction( apiKey, amount, customerId );
-            ceSaleResponse.Text = transactionResponse.ToJson( Formatting.Indented );
+            var gatewayComponent = GetFinancialGatewayComponent();
+            var gateway = GetFinancialGateway();
+            if (!caapAccountInfo.SelectedAmount.HasValue)
+            {
+                return;
+            }
+
+            var amount = caapAccountInfo.SelectedAmount.Value;
+            var referencePaymentInfo = new ReferencePaymentInfo
+            {
+                Amount = amount,
+                ReferenceNumber = gatewayComponent.GetHostedPaymentInfoToken( gateway, _hostedPaymentInfoControl ),
+                FirstName = tbFirstName.Text,
+                LastName = tbLastName.Text,
+                Street1 = acAddress.Street1,
+                Street2 = acAddress.Street2,
+                City = acAddress.City,
+                State = acAddress.State,
+                PostalCode = acAddress.PostalCode,
+                Country = acAddress.Country,
+                Phone = pnbPhone.Number,
+                Email = tbEmail.Text
+                //GatewayPersonIdentifier = "TODO when a FinancialPersonSavedAccount is selected instead of entering a new payment"
+            };
+
+            string errorMessage;
+            var financialTransaction = gatewayComponent.Charge( gateway, referencePaymentInfo, out errorMessage );
+            if ( financialTransaction == null )
+            {
+                ceSaleResponse.Text = errorMessage;
+            }
+            else
+            {
+                ceSaleResponse.Text = financialTransaction.ToJson( Formatting.Indented );
+            }
         }
 
         /// <summary>
@@ -139,7 +208,7 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnCreateCustomer_Click( object sender, EventArgs e )
         {
-            var gateway = new Rock.TransNational.Pi.PiGateway();
+            /*var gateway = new Rock.TransNational.Pi.PiGateway();
             PaymentInfo paymentInfo = new PaymentInfo
             {
                 FirstName = tbFirstName.Text,
@@ -164,7 +233,9 @@ namespace RockWeb.Blocks.Finance
             else
             {
                 tbCustomerId.Text = customerResponse.Data.Id;
-            }
+            }*/
+
+            // TODO;
         }
 
         /// <summary>
@@ -174,9 +245,9 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnGetPlans_Click( object sender, EventArgs e )
         {
-            var gateway = new Rock.TransNational.Pi.PiGateway();
-            var getPlansResponse = gateway.GetPlans( tbApiKey.Text );
-            ceGetPlansResponse.Text = getPlansResponse.ToJson( Formatting.Indented );
+            //var gateway = new Rock.TransNational.Pi.PiGateway();
+            //var getPlansResponse = gateway.GetPlans( tbApiKey.Text );
+            //ceGetPlansResponse.Text = getPlansResponse.ToJson( Formatting.Indented );
         }
 
         /// <summary>
@@ -186,7 +257,7 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnCreatePlan_Click( object sender, EventArgs e )
         {
-            var gateway = new Rock.TransNational.Pi.PiGateway();
+            /*var gateway = new Rock.TransNational.Pi.PiGateway();
             Rock.TransNational.Pi.CreatePlanParameters planParameters = new Rock.TransNational.Pi.CreatePlanParameters
             {
                 Name = tbPlanName.Text,
@@ -211,6 +282,7 @@ namespace RockWeb.Blocks.Finance
             }
 
             ceCreatePlanResponse.Text = createPlanResponse.ToJson( Formatting.Indented );
+            */
         }
 
         /// <summary>
@@ -220,7 +292,7 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnCreateSubscription_Click( object sender, EventArgs e )
         {
-            var gateway = new Rock.TransNational.Pi.PiGateway();
+            /*var gateway = new Rock.TransNational.Pi.PiGateway();
             Rock.TransNational.Pi.CreateSubscriptionParameters subscriptionParameters = new Rock.TransNational.Pi.CreateSubscriptionParameters
             {
                 Customer = new Rock.TransNational.Pi.SubscriptionCustomer
@@ -250,6 +322,7 @@ namespace RockWeb.Blocks.Finance
             }
 
             ceCreateSubscriptionResponse.Text = createSubscriptionResponse.ToJson( Formatting.Indented );
+            */
         }
 
         /// <summary>
@@ -259,7 +332,7 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnGetCustomerTransactionStatus_Click( object sender, EventArgs e )
         {
-            var gateway = new Rock.TransNational.Pi.PiGateway();
+            /*var gateway = new Rock.TransNational.Pi.PiGateway();
             var queryTransactionStatusRequest = new Rock.TransNational.Pi.QueryTransactionStatusRequest
             {
                 CustomerIdSearch = new Rock.TransNational.Pi.QuerySearchString { ComparisonOperator = "=", SearchValue = tbCustomerId.Text }
@@ -270,6 +343,7 @@ namespace RockWeb.Blocks.Finance
             var response = gateway.QueryTransactionStatus( tbApiKey.Text, queryTransactionStatusRequest );
 
             ceQueryTransactionStatus.Text = response.ToJson( Formatting.Indented );
+            */
         }
     }
 }

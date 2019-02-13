@@ -7,15 +7,16 @@ namespace Rock.Financial
     /// A Financial gateway provider that supports collecting Payment Info (Credit Card Number fields or ACH fields) in the browser.
     /// An IHostedGatewayComponent will return a token in the browser client instead of sending payment info to the Rock Server.
     /// </summary>
-    public interface IHostedGatewayComponent
+    public interface IHostedGatewayComponent: IGatewayComponent
     {
         /// <summary>
         /// Gets the hosted payment information control which will be used to collect CreditCard, ACH fields
         /// </summary>
         /// <param name="financialGateway">The financial gateway.</param>
+        /// <param name="enableACH">if set to <c>true</c> [enable ach]. (Credit Card is always enabled)</param>
         /// <param name="controlId">The control identifier.</param>
         /// <returns></returns>
-        Control GetHostedPaymentInfoControl( FinancialGateway financialGateway, string controlId );
+        Control GetHostedPaymentInfoControl( FinancialGateway financialGateway, bool enableACH, string controlId );
 
         /// <summary>
         /// Gets the JavaScript needed to tell the hostedPaymentInfoControl to get send the paymentInfo and get a token

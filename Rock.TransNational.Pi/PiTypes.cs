@@ -245,9 +245,6 @@ namespace Rock.TransNational.Pi
 
         [Newtonsoft.Json.JsonProperty( "ach", NullValueHandling = NullValueHandling.Ignore )]
         public PaymentMethodACHResponse ACH { get; set; }
-
-        [Newtonsoft.Json.JsonExtensionData]
-        public string otherData { get; set; }
     }
 
     /// <summary>
@@ -408,8 +405,15 @@ namespace Rock.TransNational.Pi
         [JsonProperty( "updated_at" )]
         public DateTime? UpdatedDateTime { get; set; }
 
-        [Newtonsoft.Json.JsonExtensionData]
-        public string otherData { get; set; }
+        /// <summary>
+        /// Newtonsoft.Json.JsonExtensionData instructs the Newtonsoft.Json.JsonSerializer to deserialize properties with no
+        /// matching class member into the specified collection
+        /// </summary>
+        /// <value>
+        /// The other data.
+        /// </value>
+        [Newtonsoft.Json.JsonExtensionData( ReadData = true, WriteData = false )]
+        public IDictionary<string, Newtonsoft.Json.Linq.JToken> _additionalData { get; set; }
     }
 
     /////
@@ -638,7 +642,6 @@ namespace Rock.TransNational.Pi
         /// The billing frequency.
         /// </value>
         [JsonProperty( "billing_frequency" )]
-        [JsonConverter( typeof( StringEnumConverter ) )]
         public BillingFrequency? BillingFrequency { get; set; }
 
         /// <summary>
@@ -743,7 +746,6 @@ namespace Rock.TransNational.Pi
         /// The type.
         /// </value>
         [JsonProperty( "type" )]
-        [JsonConverter( typeof( StringEnumConverter ) )]
         public TransactionType Type { get; set; }
 
         /// <summary>
@@ -865,7 +867,7 @@ namespace Rock.TransNational.Pi
         /// The payment method.
         /// </value>
         [JsonProperty( "payment_method" )]
-        public PaymentMethodRequest PaymentMethod { get; set; }
+        public PaymentMethodRequest PaymentMethodRequest { get; set; }
 
         /// <summary>
         /// Gets or sets the billing address.
@@ -1319,7 +1321,6 @@ namespace Rock.TransNational.Pi
         /// The billing frequency.
         /// </value>
         [JsonProperty( "billing_frequency" )]
-        [JsonConverter( typeof( StringEnumConverter ) )]
         public BillingFrequency? BillingFrequency { get; set; }
 
         /// <summary>
@@ -1529,7 +1530,6 @@ namespace Rock.TransNational.Pi
         /// The billing frequency.
         /// </value>
         [JsonProperty( "billing_frequency" )]
-        [JsonConverter( typeof( StringEnumConverter ) )]
         public BillingFrequency? BillingFrequency { get; set; }
 
         /// <summary>
@@ -2120,6 +2120,7 @@ namespace Rock.TransNational.Pi
     /// <summary>
     /// ToDo: This list might not be complete
     /// </summary>
+    [JsonConverter( typeof( StringEnumConverter ) )]
     public enum BillingFrequency
     {
         monthly,
@@ -2129,11 +2130,23 @@ namespace Rock.TransNational.Pi
     /// <summary>
     /// 
     /// </summary>
+    [JsonConverter( typeof( StringEnumConverter ) )]
     public enum TransactionType
     {
         sale,
         authorize,
         credit
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+
+    [JsonConverter( typeof( StringEnumConverter ) )]
+    public enum PiPaymentType
+    {
+        card,
+        ach
     }
 
     #endregion Rock Wrapper Types

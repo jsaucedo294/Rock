@@ -1,6 +1,6 @@
 ﻿using System;
+using System.Linq;
 using System.Web.UI;
-using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
@@ -18,10 +18,10 @@ namespace Rock.TransNational.Pi.Controls
 
         private HiddenFieldWithClass _hfPaymentInfoToken;
         private HiddenFieldWithClass _hfTokenizerRawResponse;
-        private HiddenFieldWithClass _hfEnabledPaymentTypes;
+        private HiddenFieldWithClass _hfEnabledPaymentTypesJSON;
         private HiddenFieldWithClass _hfPublicApiKey;
         private HiddenFieldWithClass _hfGatewayUrl;
-        private HtmlGenericControl _divHiddenInputStyleHook;
+        private TextBox _hiddenInputStyleHook;
         private Panel _gatewayIFrameContainer;
 
         #endregion
@@ -34,10 +34,49 @@ namespace Rock.TransNational.Pi.Controls
         /// <value>
         /// The gateway base URL.
         /// </value>
-        private string GatewayBaseUrl
+        public string GatewayBaseUrl
         {
-            get => ViewState["GatewayBaseUrl"] as string;
-            set => ViewState["GatewayBaseUrl"] = value;
+            get
+            {
+                EnsureChildControls();
+                return _hfGatewayUrl.Value;
+            }
+
+            set
+            {
+                EnsureChildControls();
+                _hfGatewayUrl.Value = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the enabled payment types.
+        /// </summary>
+        /// <value>
+        /// The enabled payment types.
+        /// </value>
+        public PiPaymentType[] EnabledPaymentTypes
+        {
+            set
+            {
+                EnsureChildControls();
+                _hfEnabledPaymentTypesJSON.Value = value.Select( a => a.ConvertToString() ).ToJson();
+            }
+        }
+
+        /// <summary>
+        /// Sets the public API key.
+        /// </summary>
+        /// <value>
+        /// The public API key.
+        /// </value>
+        public string PublicApiKey
+        {
+            set
+            {
+                EnsureChildControls();
+                _hfPublicApiKey.Value = value;
+            }
         }
 
         /// <summary>
@@ -56,7 +95,6 @@ namespace Rock.TransNational.Pi.Controls
             set
             {
                 _piGateway = value;
-                GatewayBaseUrl = _piGateway.GatewayUrl;
             }
         }
 
@@ -104,18 +142,19 @@ namespace Rock.TransNational.Pi.Controls
             _hfTokenizerRawResponse = new HiddenFieldWithClass() { ID = "_hfTokenizerRawResponse", CssClass = "js-tokenizer-raw-response" };
             Controls.Add( _hfTokenizerRawResponse );
 
-            _hfEnabledPaymentTypes = new HiddenFieldWithClass() { ID = "_hfEnabledPaymentTypes", CssClass = "js-enabled-payment-types" };
-            Controls.Add( _hfEnabledPaymentTypes );
+            _hfEnabledPaymentTypesJSON = new HiddenFieldWithClass() { ID = "_hfEnabledPaymentTypesJSON", CssClass = "js-enabled-payment-types" };
+            Controls.Add( _hfEnabledPaymentTypesJSON );
 
             _hfPublicApiKey = new HiddenFieldWithClass() { ID = "_hfPublicApiKey", CssClass = "js-public-api-key" };
             Controls.Add( _hfPublicApiKey );
 
-            _divHiddenInputStyleHook = new HtmlGenericControl( "input" );
-            _divHiddenInputStyleHook.Attributes["class"] = "js-input-style-hook";
-            _divHiddenInputStyleHook.Style["display"] = "none";
-            Controls.Add( _divHiddenInputStyleHook );
+            _hiddenInputStyleHook = new TextBox();
+            _hiddenInputStyleHook.Attributes["class"] = "js-input-style-hook";
+            _hiddenInputStyleHook.Style["display"] = "none";
+            Controls.Add( _hiddenInputStyleHook );
 
             _hfGatewayUrl = new HiddenFieldWithClass() { ID = "_hfGatewayUrl", CssClass = "js-gateway-url" };
+            Controls.Add( _hfGatewayUrl );
 
             _gatewayIFrameContainer = new Panel() { ID = "_gatewayIFrameContainer", CssClass = "js-gateway-iframe-container" };
             Controls.Add( _gatewayIFrameContainer );
