@@ -97,10 +97,27 @@ namespace RockWeb.Blocks.Finance
                 btnSubmitPaymentInfo.Attributes["onclick"] = submitScript;
             }
 
+            if ( _hostedPaymentInfoControl is IHostedGatewayPaymentControlTokenEvent )
+            {
+                ( _hostedPaymentInfoControl as IHostedGatewayPaymentControlTokenEvent ).TokenReceived += _hostedPaymentInfoControl_TokenReceived;
+            }
+
             var rockContext = new RockContext();
             var selectableAccountIds = new FinancialAccountService( rockContext ).GetByGuids( this.GetAttributeValues( AttributeKey.AccountsToDisplay ).AsGuidList() ).Select( a => a.Id ).ToArray();
 
             caapAccountInfo.SelectableAccountIds = selectableAccountIds;
+        }
+
+        /// <summary>
+        /// Handles the TokenReceived event of the _hostedPaymentInfoControl control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        private void _hostedPaymentInfoControl_TokenReceived( object sender, EventArgs e )
+        {
+            var gatewayComponent = GetFinancialGatewayComponent();
+            var gateway = GetFinancialGateway();
+            lTokenOutput.Text = gatewayComponent.GetHostedPaymentInfoToken( gateway, _hostedPaymentInfoControl );
         }
 
         private void TestPiGateway_BlockUpdated( object sender, EventArgs e )
@@ -166,10 +183,24 @@ namespace RockWeb.Blocks.Finance
         {
             var gatewayComponent = GetFinancialGatewayComponent();
             var gateway = GetFinancialGateway();
-            if (!caapAccountInfo.SelectedAmount.HasValue)
+            if ( caapAccountInfo.AmountEntryMode == Rock.Web.UI.Controls.CampusAccountAmountPicker.AccountAmountEntryMode.SingleAccount )
             {
-                return;
+                if ( !caapAccountInfo.SelectedAmount.HasValue )
+                {
+                    nbAmountRequired.Visible = true;
+                    return;
+                }
             }
+            else
+            {
+                if ( !caapAccountInfo.AccountAmounts.Any( a => a.Amount != 0 ) )
+                {
+                    nbAmountRequired.Visible = true;
+                    return;
+                }
+            }
+
+            nbAmountRequired.Visible = false;
 
             var amount = caapAccountInfo.SelectedAmount.Value;
             var referencePaymentInfo = new ReferencePaymentInfo
@@ -257,7 +288,8 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnCreatePlan_Click( object sender, EventArgs e )
         {
-            /*var gateway = new Rock.TransNational.Pi.PiGateway();
+            /*var financialGateway = GetFinancialGateway();
+            var gateway = new Rock.TransNational.Pi.PiGateway();
             Rock.TransNational.Pi.CreatePlanParameters planParameters = new Rock.TransNational.Pi.CreatePlanParameters
             {
                 Name = tbPlanName.Text,
@@ -271,7 +303,7 @@ namespace RockWeb.Blocks.Finance
 
             var test = planParameters.ToJson( Formatting.Indented );
 
-            var createPlanResponse = gateway.CreatePlan( tbApiKey.Text, planParameters );
+            var createPlanResponse = gateway.CreatePlan( gateway.GetGatewayUrl( financialGateway ), "api_1D4yJCYJNXV3MqnOmAlEMHmYYeg", planParameters );
             if ( createPlanResponse.Data != null )
             {
                 tbPlanId.Text = createPlanResponse.Data.Id;

@@ -17,15 +17,15 @@
                 <ItemTemplate>
                     <div class="panel panel-block">
                         <div class="panel-body">
-                            <asp:HiddenField ID="hfGatewayId" runat="server" />
+                            <asp:HiddenField ID="hfGatewayEntityTypeId" runat="server" />
                             <h4>
                                 <asp:Literal ID="lGatewayName" runat="server" /></h4>
                             <p>
                                 <asp:Literal ID="lGatewayDescription" runat="server" />
                             </p>
                             <div class="actions">
-                                <asp:LinkButton ID="btnGatewayConfigure" runat="server" CssClass="btn btn-xs btn-success" Text="Configure" OnClick="btnGatewayConfigure_Click" />
-                                <asp:LinkButton ID="btnGatewayLearnMore" runat="server" CssClass="btn btn-xs btn-link" Text="Learn More" OnClick="btnGatewayLearnMore_Click" />
+                                <asp:HyperLink ID="aGatewayConfigure" runat="server" CssClass="btn btn-xs btn-success" Text="Configure" />
+                                <asp:HyperLink ID="aGatewayLearnMore" runat="server" CssClass="btn btn-xs btn-link" Text="Learn More" />
                             </div>
                         </div>
                     </div>
@@ -41,6 +41,7 @@
                 <asp:Panel ID="pnlScheduledTransactions" runat="server" CssClass="col-sm-4 scheduled-transactions" Visible="false">
                     <h4>
                         <asp:Literal ID="lScheduledTransactionsTitle" runat="server" Text="Scheduled Transactions" /></h4>
+
                     <asp:Repeater ID="rptScheduledTransactions" runat="server" OnItemDataBound="rptScheduledTransactions_ItemDataBound">
                         <ItemTemplate>
                             <div class="scheduled-transaction js-scheduled-transaction">
@@ -95,30 +96,11 @@
                 <div class="col-sm-8">
                     <h2>
                         <asp:Literal ID="lIntroMessage" runat="server" /></h2>
-                    <div class="account-amount-single-entry">
-                        <input type="number" id="nbAccountAmountSingle" runat="server" class="text-center h1" value="0.00" placeholder="Enter Amount" style="border: none;" />
-                    </div>
 
                     <%-- Collect Transaction Info --%>
                     <asp:Panel ID="pnlPromptForAmounts" runat="server">
 
-                        <%-- Prompt for Account Amounts (in MultiAccount mode) --%>
-                        <asp:Panel ID="pnlPromptForAccountsMulti" runat="server" Visible="false">
-                            <asp:Repeater ID="rptPromptForAccountsMulti" runat="server" OnItemDataBound="rptPromptForAccountsMulti_ItemDataBound">
-                                <ItemTemplate>
-                                    <asp:HiddenField ID="hfAccountAmountMultiAccountId" runat="server" />
-                                    <Rock:CurrencyBox ID="nbAccountAmountMulti" CssClass="js-account-amount-entry" runat="server" Label="##Account Name##" />
-                                </ItemTemplate>
-                            </asp:Repeater>
-                        </asp:Panel>
-
-                        <%-- Note: Campus is shown AFTER accounts when in MultiAccount mode, but BEFORE accounts when in SingleAccount mode --%>
-                        <Rock:ButtonDropDownList ID="ddlCampus" runat="server" FormGroupCssClass=" margin-t-md" />
-
-                        <%-- Prompt for single account amount (in SingleAccount mode) --%>
-                        <asp:Panel ID="pnlPromptForAccountSingle" runat="server" Visible="false">
-                            <Rock:ButtonDropDownList ID="ddlAccountSingle" runat="server" FormGroupCssClass=" margin-t-md" />
-                        </asp:Panel>
+                        <Rock:CampusAccountAmountPicker ID="caapPromptForAccountAmounts" runat="server" />
 
                         <asp:Panel ID="pnlScheduledTransaction" runat="server">
 
@@ -134,15 +116,18 @@
 
                     <%-- Collect/Update Personal Information --%>
                     <asp:Panel ID="pnlPersonalInformation" runat="server" Visible="false">
-
                     </asp:Panel>
 
                     <%-- Collect Payment Info --%>
-                    <asp:Panel ID="pnlPaymentInfo" runat="server" Visible="false">
-                        <%-- Placeholder for the Gateway's Payment Control --%>
-                        ##TODO: Gateway's PaymentInfo control would go here##
-                        <asp:PlaceHolder ID="phGatewayPaymentInfoControl" runat="server" />
+                    <asp:Panel ID="pnlPaymentInfo" runat="server" Visible="true">
+                        <h1>##Hosted Payment Control##</h1>
+                        <div style="border-width: thick; border-color: red; border-style: solid;" class="margin-b-md">
+                            <Rock:DynamicPlaceholder ID="phHostedPaymentControl" runat="server" />
+                        </div>
+
+                        <asp:LinkButton ID="btnGetPaymentInfoNext" runat="server" Text="Next" CssClass="btn btn-primary js-submit-hostedpaymentinfo" OnClick="btnGetPaymentInfoNext_Click" />
                     </asp:Panel>
+
                 </div>
             </div>
 
@@ -185,6 +170,11 @@
 
                 $scheduleDetailsContainers.each(function (index) {
                     setScheduledDetailsVisibility($($scheduleDetailsContainers[index]), false);
+                });
+
+                $('.js-submit-hostedpaymentinfo').click(function () {
+                    debugger
+                    <%=HostPaymentInfoSubmitScript%>
                 });
 
 

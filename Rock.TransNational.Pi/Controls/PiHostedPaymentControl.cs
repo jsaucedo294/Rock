@@ -12,7 +12,7 @@ namespace Rock.TransNational.Pi.Controls
     /// </summary>
     /// <seealso cref="System.Web.UI.WebControls.CompositeControl" />
     /// <seealso cref="System.Web.UI.INamingContainer" />
-    public class PiHostedPaymentControl : CompositeControl, INamingContainer
+    public class PiHostedPaymentControl : CompositeControl, INamingContainer, Rock.Financial.IHostedGatewayPaymentControlTokenEvent
     {
         #region Controls
 
@@ -27,6 +27,15 @@ namespace Rock.TransNational.Pi.Controls
         #endregion
 
         private PiGateway _piGateway;
+
+        #region Rock.Financial.IHostedGatewayPaymentControlTokenEvent
+
+        /// <summary>
+        /// Occurs when a payment token is received from the hosted gateway
+        /// </summary>
+        public event EventHandler TokenReceived;
+
+        #endregion Rock.Financial.IHostedGatewayPaymentControlTokenEvent
 
         /// <summary>
         /// Gets or sets the gateway base URL.
@@ -113,6 +122,15 @@ namespace Rock.TransNational.Pi.Controls
             }
         }
 
+        public string PaymentInfoTokenRaw
+        {
+            get
+            {
+                EnsureChildControls();
+                return _hfTokenizerRawResponse.Value;
+            }
+        }
+
         /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Init" /> event.
         /// </summary>
@@ -128,6 +146,53 @@ namespace Rock.TransNational.Pi.Controls
             System.Web.UI.ScriptManager.RegisterStartupScript( this, this.GetType(), "piGatewayTokenizerStartup", $"initializeTokenizer('{this.ClientID}');", true );
 
             base.OnInit( e );
+        }
+
+        /// <summary>
+        /// Writes the <see cref="T:System.Web.UI.WebControls.CompositeControl" /> content to the specified <see cref="T:System.Web.UI.HtmlTextWriter" /> object, for display on the client.
+        /// </summary>
+        /// <param name="writer">An <see cref="T:System.Web.UI.HtmlTextWriter" /> that represents the output stream to render HTML content on the client.</param>
+        protected override void Render( HtmlTextWriter writer )
+        {
+            if ( TokenReceived != null )
+            {
+                var updatePanel = this.ParentUpdatePanel();
+                string postbackControlId;
+                if ( updatePanel != null )
+                {
+                    postbackControlId = updatePanel.ClientID;
+                }
+                else
+                {
+                    postbackControlId = this.ID;
+                }
+
+                this.Attributes["data-postback-script"] = $"javascript:__doPostBack('{postbackControlId}', '{this.ID}')";
+            }
+
+            base.Render( writer );
+        }
+
+        /// <summary>
+        /// Raises the <see cref="E:System.Web.UI.Control.Load" /> event.
+        /// </summary>
+        /// <param name="e">The <see cref="T:System.EventArgs" /> object that contains the event data.</param>
+        protected override void OnLoad( EventArgs e )
+        {
+            base.OnLoad( e );
+
+            if ( this.Page.IsPostBack )
+            {
+                string[] eventArgs = ( this.Page.Request.Form["__EVENTARGUMENT"] ?? string.Empty ).Split( new[] { "=" }, StringSplitOptions.RemoveEmptyEntries );
+
+                if ( eventArgs.Length >= 1 )
+                {
+                    if ( eventArgs[0] == this.ID )
+                    {
+                        TokenReceived?.Invoke( this, new EventArgs() );
+                    }
+                }
+            }
         }
 
         /// <summary>

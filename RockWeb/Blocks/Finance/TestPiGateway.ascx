@@ -14,6 +14,8 @@
             <div class="panel-body">
                 <div class="row">
                     <div class="col-md-8">
+
+
                         <h1>Get Amount</h1>
                         <Rock:CampusAccountAmountPicker ID="caapAccountInfo" runat="server" AmountEntryMode="SingleAccount" />
 
@@ -24,12 +26,13 @@
                             <Rock:DynamicPlaceholder ID="phHostedPaymentControl" runat="server" />
                         </div>
 
-                        <span class="btn btn-primary btn-sm" runat="server" id="btnSubmitPaymentInfo" onclick='submitTokenizer()'>Get Token</span>
+                        <span class="btn btn-primary btn-sm" runat="server" id="btnSubmitPaymentInfo">Get Token</span>
+                        <Rock:RockLiteral ID="lTokenOutput" runat="server" Label="Token Output" Text="-" />
 
                         <hr />
                         <Rock:NotificationBox ID="wbToken" runat="server" NotificationBoxType="Warning" Text="Note that Tokens can only be used once. (You'll get an 'Internal Server Error' if you use it more than once)." />
 
-                        <asp:Panel ID="pnlHideStuff" runat="server" Visible="false">
+                        <Rock:PanelWidget ID="pwInternalGatewayFunctions" runat="server" Title="Internal Pi Gateway Functions" Visible="false">
                             <h1>Create Plan</h1>
                             <Rock:RockTextBox ID="tbPlanName" runat="server" Label="Plan Name" Text="test plan" />
                             <Rock:RockTextBox ID="tbPlanDescription" runat="server" Label="Plan Description" Text="test plan description" />
@@ -38,6 +41,7 @@
                             <Rock:RockDropDownList ID="ddlPlanBillingFrequency" runat="server" Label="Plan billing_frequency" Help="How often run within a billing cycle. (monthly, twice_monthly, ??)">
                                 <asp:ListItem Text="monthly" />
                                 <asp:ListItem Text="twice_monthly" />
+                                <asp:ListItem Text="daily" />
                             </Rock:RockDropDownList>
                             <Rock:RockTextBox ID="tbPlanBillingDays" runat="server" Label="Plan billing_days" Help="Which day to bill on. If twice_monthly, then comma separate dates" />
                             <asp:LinkButton ID="btnCreatePlan" runat="server" CssClass="btn btn-primary" OnClick="btnCreatePlan_Click" Text="Create Plan" />
@@ -57,11 +61,12 @@
 
                             <Rock:NotificationBox ID="nbSubscriptionPlanOverrides" runat="server" Text="Leave Amount, billing_cycle_interval, billing_frequency and/or billing_days blank to use Plan defaults" />
                             <Rock:NumberBox ID="tbSubscriptionAmount" runat="server" Label="Subscription Amount" Text="2.00" NumberType="Currency" />
-                            <Rock:NumberBox ID="tbSubscriptionBillingCycleInterval" runat="server" Label="Subscription billing_cycle_interval" Help="How often to run the billing cycle. Run every x months" />
+                            <Rock:NumberBox ID="tbSubscriptionBillingCycleInterval" runat="server" Label="Subscription billing_cycle_interval" Help="How often to run the billing cycle. Run every x months, or every x (days + billing days) to create weekly, biweekly" />
                             <Rock:RockDropDownList ID="ddlSubscriptionBillingFrequency" runat="server" Label="Subscription billing_frequency" Help="How often run within a billing cycle. (monthly, twice_monthly, ??)">
                                 <asp:ListItem Text="(use plan default)" />
                                 <asp:ListItem Text="monthly" />
                                 <asp:ListItem Text="twice_monthly" />
+                                <asp:ListItem Text="daily" />
                             </Rock:RockDropDownList>
                             <Rock:RockTextBox ID="tbSubscriptionBillingDays" runat="server" Label="Subscription billing_days" Help="Which day to bill on. If twice_monthly, then comma separate dates" />
                             <Rock:NumberBox ID="nbSubscriptionDuration" runat="server" Label="Subscription duration" Help="(No Documention)" />
@@ -73,7 +78,7 @@
                             <h1>Get Customer Transaction Statuses</h1>
                             <asp:LinkButton ID="btnGetCustomerTransactionStatus" runat="server" CssClass="btn btn-primary" OnClick="btnGetCustomerTransactionStatus_Click" Text="Query Transactions" />
                             <Rock:CodeEditor ID="ceQueryTransactionStatus" runat="server" EditorMode="JavaScript" Label="CustomerTransactionStatus Response" EditorHeight="400" />
-                        </asp:Panel>
+                        </Rock:PanelWidget>
 
 
                         <h1>Customer (Billing Information)</h1>
@@ -84,6 +89,7 @@
                         <Rock:EmailBox ID="tbEmail" runat="server" Label="Email" />
 
                         <h1>Process One-Time Sale</h1>
+                        <Rock:NotificationBox ID="nbAmountRequired" runat="server" NotificationBoxType="Danger" Text="Amount is required" Visible="false" />
                         <asp:LinkButton ID="btnProcessSale" runat="server" CssClass="btn btn-primary" Text="Process Sale" OnClick="btnProcessSale_Click" />
                         <Rock:CodeEditor ID="ceSaleResponse" runat="server" EditorMode="JavaScript" Label="Sale Response" EditorHeight="400" />
                     </div>
@@ -169,6 +175,14 @@
             </div>
 
         </asp:Panel>
+
+        <script type="text/javascript">
+            function displayToken() {
+                debugger;
+                var token = $('.js-response-token').val();
+                $('.js-token-output').val(token);
+            };
+        </script>
 
     </ContentTemplate>
 </asp:UpdatePanel>

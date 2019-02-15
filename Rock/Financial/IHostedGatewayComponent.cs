@@ -11,6 +11,7 @@ namespace Rock.Financial
     {
         /// <summary>
         /// Gets the hosted payment information control which will be used to collect CreditCard, ACH fields
+        /// Note: A HostedPaymentInfoControl can optionally implement <seealso cref="IHostedGatewayPaymentControl"/>
         /// </summary>
         /// <param name="financialGateway">The financial gateway.</param>
         /// <param name="enableACH">if set to <c>true</c> [enable ach]. (Credit Card is always enabled)</param>
@@ -19,8 +20,8 @@ namespace Rock.Financial
         Control GetHostedPaymentInfoControl( FinancialGateway financialGateway, bool enableACH, string controlId );
 
         /// <summary>
-        /// Gets the JavaScript needed to tell the hostedPaymentInfoControl to get send the paymentInfo and get a token
-        /// Put this on your 'Next' or 'Submit' button so that the hostedPaymentInfoControl will fetch the token/response
+        /// Gets the JavaScript needed to tell the hostedPaymentInfoControl to get send the paymentInfo and get a token.
+        /// Have your 'Next' or 'Submit' call this so that the hostedPaymentInfoControl will fetch the token/response
         /// </summary>
         /// <param name="financialGateway">The financial gateway.</param>
         /// <param name="hostedPaymentInfoControl">The hosted payment information control.</param>
@@ -34,5 +35,21 @@ namespace Rock.Financial
         /// <param name="hostedPaymentInfoControl">The hosted payment information control.</param>
         /// <returns></returns>
         string GetHostedPaymentInfoToken( FinancialGateway financialGateway, Control hostedPaymentInfoControl );
+
+        /// <summary>
+        /// Gets the URL that the Gateway Information UI will navigate to when they click the 'Configure' link
+        /// </summary>
+        /// <value>
+        /// The configure URL.
+        /// </value>
+        string ConfigureURL { get; }
+
+        /// <summary>
+        /// Gets the URL that the Gateway Information UI will navigate to when they click the 'Learn More' link
+        /// </summary>
+        /// <value>
+        /// The learn more URL.
+        /// </value>
+        string LearnMoreURL { get; }
     }
 }

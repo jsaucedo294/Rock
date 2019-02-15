@@ -213,5 +213,13 @@ namespace Rock.Financial
         /// <param name="lastTransactionDate">The last transaction date.</param>
         /// <returns></returns>
         DateTime? GetNextPaymentDate( FinancialScheduledTransaction scheduledTransaction, DateTime? lastTransactionDate );
+
+        /// <summary>
+        /// Gets the Entity Type GUID for the <see cref="Rock.Data.IEntity"/> that this gateway uses
+        /// </summary>
+        /// <value>
+        /// The type GUID.
+        /// </value>
+        Guid TypeGuid { get; }
     }
 }

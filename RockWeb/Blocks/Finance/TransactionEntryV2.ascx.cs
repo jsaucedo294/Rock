@@ -15,15 +15,16 @@
 // </copyright>
 //
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
-using System.Diagnostics;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
 using Rock;
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Financial;
 using Rock.Model;
 using Rock.Web.Cache;
 using Rock.Web.UI;
@@ -45,6 +46,11 @@ namespace RockWeb.Blocks.Finance
         Key = AttributeKey.FinancialGateway,
         Description = "The payment gateway to use for Credit Card and ACH transactions.",
         Order = 0 )]
+
+    [BooleanField(
+        "Enable ACH",
+        Key = AttributeKey.EnableACH,
+        Order = 1 )]
 
     [TextField(
         "Batch Name Prefix",
@@ -223,6 +229,8 @@ mission. We are so grateful for your commitment.</p>
 
             public const string FinancialGateway = "FinancialGateway";
 
+            public const string EnableACH = "EnableACH";
+
             public const string FinancialSourceType = "FinancialSourceType";
 
             public const string ShowScheduledTransactions = "ShowScheduledTransactions";
@@ -264,8 +272,79 @@ mission. We are so grateful for your commitment.</p>
 
         #endregion
 
+        #region fields
+
+        Control _hostedPaymentInfoControl;
+
+        /// <summary>
+        /// use FinancialGateway instead
+        /// </summary>
+        private Rock.Model.FinancialGateway _financialGateway = null;
+
+        /// <summary>
+        /// Gets the financial gateway (model) that is configured for this block
+        /// </summary>
+        /// <returns></returns>
+        private Rock.Model.FinancialGateway FinancialGateway
+        {
+            get
+            {
+                if ( _financialGateway == null )
+                {
+                    RockContext rockContext = new RockContext();
+                    var financialGatewayGuid = this.GetAttributeValue( AttributeKey.FinancialGateway ).AsGuid();
+                    _financialGateway = new FinancialGatewayService( rockContext ).GetNoTracking( financialGatewayGuid );
+                }
+
+                return _financialGateway;
+            }
+        }
+
+        private IHostedGatewayComponent _financialGatewayComponent = null;
+
+        /// <summary>
+        /// Gets the financial gateway component that is configured for this block
+        /// </summary>
+        /// <returns></returns>
+        private IHostedGatewayComponent FinancialGatewayComponent
+        {
+            get
+            {
+                if ( _financialGatewayComponent == null )
+                {
+                    var financialGateway = FinancialGateway;
+                    if ( financialGateway != null )
+                    {
+                        _financialGatewayComponent = financialGateway.GetGatewayComponent() as IHostedGatewayComponent;
+                    }
+                }
+
+                return _financialGatewayComponent;
+            }
+        }
+
+        #endregion fields
 
         #region Base Control Methods
+
+        /// <summary>
+        /// Gets or sets the host payment information submit JavaScript.
+        /// </summary>
+        /// <value>
+        /// The host payment information submit script.
+        /// </value>
+        protected string HostPaymentInfoSubmitScript
+        {
+            get
+            {
+                return ViewState["HostPaymentInfoSubmitScript"] as string;
+            }
+
+            set
+            {
+                ViewState["HostPaymentInfoSubmitScript"] = value;
+            }
+        }
 
         /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Init" /> event.
@@ -278,6 +357,29 @@ mission. We are so grateful for your commitment.</p>
             // this event gets fired after block settings are updated. it's nice to repaint the screen if these settings would alter it
             this.BlockUpdated += Block_BlockUpdated;
             this.AddConfigurationUpdateTrigger( upnlContent );
+
+            bool enableACH = this.GetAttributeValue( AttributeKey.EnableACH ).AsBoolean();
+            if ( this.FinancialGatewayComponent != null && this.FinancialGateway != null )
+            {
+                _hostedPaymentInfoControl = this.FinancialGatewayComponent.GetHostedPaymentInfoControl( this.FinancialGateway, enableACH, "_hostedPaymentInfoControl" );
+                phHostedPaymentControl.Controls.Add( _hostedPaymentInfoControl );
+                this.HostPaymentInfoSubmitScript = this.FinancialGatewayComponent.GetHostPaymentInfoSubmitScript( this.FinancialGateway, _hostedPaymentInfoControl );
+            }
+
+            if ( _hostedPaymentInfoControl is IHostedGatewayPaymentControlTokenEvent )
+            {
+                ( _hostedPaymentInfoControl as IHostedGatewayPaymentControlTokenEvent ).TokenReceived += _hostedPaymentInfoControl_TokenReceived;
+            }
+
+            var rockContext = new RockContext();
+            var selectableAccountIds = new FinancialAccountService( rockContext ).GetByGuids( this.GetAttributeValues( AttributeKey.AccountsToDisplay ).AsGuidList() ).Select( a => a.Id ).ToArray();
+
+            caapPromptForAccountAmounts.SelectableAccountIds = selectableAccountIds;
+        }
+
+        private void _hostedPaymentInfoControl_TokenReceived( object sender, EventArgs e )
+        {
+            string token = this.FinancialGatewayComponent.GetHostedPaymentInfoToken( this.FinancialGateway, _hostedPaymentInfoControl );
         }
 
         /// <summary>
@@ -305,18 +407,21 @@ mission. We are so grateful for your commitment.</p>
             }
 
             SetTargetPerson();
+            SetDefaultCampus();
 
             lIntroMessage.Text = this.GetAttributeValue( AttributeKey.IntroMessage );
 
-            LoadCampuses();
-            BindAccounts();
-
             pnlTransactionEntry.Visible = true;
             bool enableMultiAccount = this.GetAttributeValue( AttributeKey.EnableMultiAccount ).AsBoolean();
-            nbAccountAmountSingle.Visible = !enableMultiAccount;
-            pnlPromptForAccountSingle.Visible = !enableMultiAccount;
-            pnlPromptForAccountsMulti.Visible = enableMultiAccount;
-            
+            if ( enableMultiAccount )
+            {
+                caapPromptForAccountAmounts.AmountEntryMode = CampusAccountAmountPicker.AccountAmountEntryMode.MultipleAccounts;
+            }
+            else
+            {
+                caapPromptForAccountAmounts.AmountEntryMode = CampusAccountAmountPicker.AccountAmountEntryMode.SingleAccount;
+            }
+
             if ( this.GetAttributeValue( AttributeKey.ShowScheduledTransactions ).AsBoolean() )
             {
                 lScheduledTransactionsTitle.Text = string.Format( "Scheduled {0}", ( this.GetAttributeValue( AttributeKey.GiftTerm ) ?? "Gift" ).Pluralize() );
@@ -380,23 +485,32 @@ mission. We are so grateful for your commitment.</p>
         /// <param name="e">The <see cref="System.Web.UI.WebControls.RepeaterItemEventArgs"/> instance containing the event data.</param>
         protected void rptInstalledGateways_ItemDataBound( object sender, System.Web.UI.WebControls.RepeaterItemEventArgs e )
         {
-            FinancialGateway financialGateway = e.Item.DataItem as FinancialGateway;
-            if ( financialGateway == null )
+            IHostedGatewayComponent financialGatewayComponent = e.Item.DataItem as IHostedGatewayComponent;
+            if ( financialGatewayComponent == null )
             {
                 return;
             }
 
-            HiddenField hfGatewayId = e.Item.FindControl( "hfGatewayId" ) as HiddenField;
-            hfGatewayId.Value = financialGateway.Id.ToString();
+            var gatewayEntityType = EntityTypeCache.Get( financialGatewayComponent.TypeGuid );
+            var gatewayEntityTypeType = gatewayEntityType.GetEntityType();
+
+            HiddenField hfGatewayEntityTypeId = e.Item.FindControl( "hfGatewayEntityTypeId" ) as HiddenField;
+            hfGatewayEntityTypeId.Value = gatewayEntityType.Id.ToString();
 
             Literal lGatewayName = e.Item.FindControl( "lGatewayName" ) as Literal;
             Literal lGatewayDescription = e.Item.FindControl( "lGatewayDescription" ) as Literal;
 
-            lGatewayName.Text = financialGateway.Name;
-            lGatewayDescription.Text = financialGateway.Description;
+            lGatewayName.Text = Reflection.GetDisplayName( gatewayEntityTypeType );
+            lGatewayDescription.Text = Reflection.GetDescription( gatewayEntityTypeType );
 
-            //LinkButton btnGatewayConfigure = e.Item.FindControl( "btnGatewayConfigure" ) as LinkButton;
-            //LinkButton btnGatewayLearnMore = e.Item.FindControl( "btnGatewayLearnMore" ) as LinkButton;
+
+            HyperLink aGatewayConfigure = e.Item.FindControl( "aGatewayConfigure" ) as HyperLink;
+            HyperLink aGatewayLearnMore = e.Item.FindControl( "aGatewayLearnMore" ) as HyperLink;
+            aGatewayConfigure.Visible = financialGatewayComponent.ConfigureURL.IsNotNullOrWhiteSpace();
+            aGatewayLearnMore.Visible = financialGatewayComponent.LearnMoreURL.IsNotNullOrWhiteSpace();
+
+            aGatewayConfigure.NavigateUrl = financialGatewayComponent.ConfigureURL;
+            aGatewayLearnMore.NavigateUrl = financialGatewayComponent.LearnMoreURL;
         }
 
         /// <summary>
@@ -404,15 +518,7 @@ mission. We are so grateful for your commitment.</p>
         /// </summary>
         private bool LoadGatewayOptions()
         {
-            var financialGatewayGuid = this.GetAttributeValue( AttributeKey.FinancialGateway ).AsGuidOrNull();
-            var rockContext = new RockContext();
-            var financialGatewayService = new FinancialGatewayService( rockContext );
-            FinancialGateway _financialGateway = null;
-            if ( financialGatewayGuid.HasValue )
-            {
-                _financialGateway = financialGatewayService.GetNoTracking( financialGatewayGuid.Value );
-            }
-            if ( _financialGateway == null )
+            if ( this.FinancialGatewayComponent == null )
             {
                 ShowGatewayHelp();
                 return false;
@@ -424,17 +530,15 @@ mission. We are so grateful for your commitment.</p>
 
             var testGatewayGuid = Rock.SystemGuid.EntityType.FINANCIAL_GATEWAY_TEST_GATEWAY.AsGuid();
 
-            if ( _financialGateway.GetGatewayComponent().TypeGuid == testGatewayGuid )
+            if ( this.FinancialGatewayComponent.TypeGuid == testGatewayGuid )
             {
                 ShowConfigurationMessage( NotificationBoxType.Warning, "Testing", "You are using the Test Financial Gateway. No actual amounts will be charged to your card or bank account." );
             }
             else
             {
-
                 HideConfigurationMessage();
             }
 
-            var _financialGatewayComponent = _financialGateway.GetGatewayComponent();
             var supportedFrequencies = _financialGatewayComponent.SupportedPaymentSchedules;
             foreach ( var supportedFrequency in supportedFrequencies )
             {
@@ -463,10 +567,14 @@ mission. We are so grateful for your commitment.</p>
             pnlGatewayHelp.Visible = true;
             pnlTransactionEntry.Visible = false;
 
-            var rockContext = new RockContext();
-            var installedGatewayList = new FinancialGatewayService( rockContext ).Queryable().OrderBy( a => a.Name ).AsNoTracking().ToList();
+            //Dictionary<string, IHostedGatewayComponent>
+            var hostedGatewayComponentList = Rock.Financial.GatewayContainer.Instance.Components
+                .Select( a => a.Value.Value )
+                .Where( a => a is IHostedGatewayComponent )
+                .Select( a => a as IHostedGatewayComponent ).ToList();
 
-            rptInstalledGateways.DataSource = installedGatewayList;
+
+            rptInstalledGateways.DataSource = hostedGatewayComponentList;
             rptInstalledGateways.DataBind();
         }
 
@@ -721,13 +829,13 @@ mission. We are so grateful for your commitment.</p>
 
             int[] allowedCurrencyTypeIds = allowedCurrencyTypes.Select( a => a.Id ).ToArray();
 
-            var financialGateway = this.GetFinancialGateway();
+            var financialGateway = this.FinancialGateway;
             if ( financialGateway == null )
             {
                 return;
             }
 
-            var financialGatewayComponent = financialGateway.GetGatewayComponent();
+            var financialGatewayComponent = this.FinancialGatewayComponent;
             if ( financialGatewayComponent == null )
             {
                 return;
@@ -770,35 +878,11 @@ mission. We are so grateful for your commitment.</p>
             }
         }
 
-        private FinancialGateway _financialGateway = null;
-
         /// <summary>
-        /// Gets the financial gateway component that is configured for this block
+        /// Sets the default campus.
         /// </summary>
-        /// <returns></returns>
-        private FinancialGateway GetFinancialGateway()
+        private void SetDefaultCampus()
         {
-            if ( _financialGateway == null )
-            {
-                RockContext rockContext = new RockContext();
-                var financialGatewayGuid = this.GetAttributeValue( AttributeKey.FinancialGateway ).AsGuid();
-                _financialGateway = new FinancialGatewayService( rockContext ).GetNoTracking( financialGatewayGuid );
-            }
-
-            return _financialGateway;
-        }
-
-        /// <summary>
-        /// Loads the campuses.
-        /// </summary>
-        private void LoadCampuses()
-        {
-            ddlCampus.Items.Clear();
-            foreach ( var campus in CampusCache.All().OrderBy( a => a.Order ) )
-            {
-                ddlCampus.Items.Add( new ListItem( campus.Name, campus.Id.ToString() ) );
-            }
-
             CampusCache defaultCampus = CampusCache.All().FirstOrDefault();
 
             if ( CurrentPerson != null )
@@ -810,74 +894,7 @@ mission. We are so grateful for your commitment.</p>
                 }
             }
 
-            if ( ddlCampus.Items.Count > 0 )
-            {
-                ddlCampus.SetValue( defaultCampus );
-            }
-        }
-
-        /// <summary>
-        /// Binds the accounts.
-        /// </summary>
-        private void BindAccounts()
-        {
-            var rockContext = new RockContext();
-            var selectedAccountGuids = GetAttributeValues( AttributeKey.AccountsToDisplay ).AsGuidList();
-
-            IQueryable<FinancialAccount> accountsQry;
-            var financialAccountService = new FinancialAccountService( rockContext );
-
-            if ( selectedAccountGuids.Any() )
-            {
-                accountsQry = financialAccountService.GetByGuids( selectedAccountGuids );
-            }
-            else
-            {
-                accountsQry = financialAccountService.Queryable();
-            }
-
-            // limit to active, public accounts, and don't include ones that aren't within the date range
-            accountsQry = accountsQry.Where( f =>
-                    f.IsActive &&
-                    f.IsPublic.HasValue &&
-                    f.IsPublic.Value &&
-                    ( f.StartDate == null || f.StartDate <= RockDateTime.Today ) &&
-                    ( f.EndDate == null || f.EndDate >= RockDateTime.Today ) )
-                .OrderBy( f => f.Order );
-
-            var accountsList = accountsQry.AsNoTracking().ToList();
-
-            ddlAccountSingle.Items.Clear();
-
-            foreach ( var account in accountsList )
-            {
-                ddlAccountSingle.Items.Add( new ListItem( account.PublicName, account.Id.ToString() ) );
-            }
-
-            ddlAccountSingle.SetValue( accountsList.FirstOrDefault() );
-
-            rptPromptForAccountsMulti.DataSource = accountsList;
-            rptPromptForAccountsMulti.DataBind();
-        }
-
-        /// <summary>
-        /// Handles the ItemDataBound event of the rptPromptForAccountsMulti control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="RepeaterItemEventArgs"/> instance containing the event data.</param>
-        protected void rptPromptForAccountsMulti_ItemDataBound( object sender, RepeaterItemEventArgs e )
-        {
-            var financialAccount = e.Item.DataItem as FinancialAccount;
-            if ( financialAccount == null )
-            {
-                return;
-            }
-
-            var hfAccountAmountMultiAccountId = e.Item.FindControl( "hfAccountAmountMultiAccountId" ) as HiddenField;
-            var nbAccountAmountMulti = e.Item.FindControl( "nbAccountAmountMulti" ) as CurrencyBox;
-
-            hfAccountAmountMultiAccountId.Value = financialAccount.Id.ToString();
-            nbAccountAmountMulti.Label = financialAccount.PublicName;
+            caapPromptForAccountAmounts.CampusId = defaultCampus.Id;
         }
 
         /// <summary>
@@ -912,7 +929,7 @@ mission. We are so grateful for your commitment.</p>
                 dtpStartDate.Label = "Start Giving On";
             }
 
-            
+
             // if scheduling recurring, it can't start today since the gateway will be taking care of automated giving, it might have already processed today's transaction. So make sure it is no earlier than tomorrow.
             if ( !oneTime && ( !dtpStartDate.SelectedDate.HasValue || dtpStartDate.SelectedDate.Value.Date <= RockDateTime.Today ) )
             {
@@ -931,5 +948,10 @@ mission. We are so grateful for your commitment.</p>
         }
 
         #endregion Transaction Entry Related
+
+        protected void btnGetPaymentInfoNext_Click( object sender, EventArgs e )
+        {
+
+        }
     }
 }

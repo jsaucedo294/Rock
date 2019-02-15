@@ -636,7 +636,9 @@ namespace Rock.TransNational.Pi
         public int? BillingCycleInterval { get; set; }
 
         /// <summary>
-        /// "How often run within a billing cycle. (monthly..."
+        /// "How often run within a billing cycle. See <see cref="BillingFrequency"/>.
+        /// Note: Use <see cref="BillingFrequency.daily"/> then set <see cref="BillingCycleInterval"/> and <see cref="BillingDays"/> to make Every Week and Every Other Week schedules
+        /// as shown on https://sandbox.gotnpgateway.com/docs/api/#bill-once-every-7-days-until-canceled and https://sandbox.gotnpgateway.com/docs/api/#bill-once-other-week-until-canceled.
         /// </summary>
         /// <value>
         /// The billing frequency.
@@ -645,7 +647,8 @@ namespace Rock.TransNational.Pi
         public BillingFrequency? BillingFrequency { get; set; }
 
         /// <summary>
-        /// "Which day to bill on. If twice_monthly, then comma separate dates"
+        /// If BillingFrequency = <seealso cref="BillingFrequency.twice_monthly "/>, this is the days of the month to bill (for example "1,15" for the 1st and 15th).
+        /// If BillingFrequency = <seealso cref="BillingFrequency.daily "/>
         /// </summary>
         /// <value>
         /// The billing days.
@@ -683,6 +686,18 @@ namespace Rock.TransNational.Pi
         /// </value>
         [JsonProperty( "amount" )]
         public int AmountCents { get; set; }
+    }
+
+    public class TokenizerResponse : BaseResponseData
+    {
+        /// <summary>
+        /// Gets or sets the message.
+        /// </summary>
+        /// <value>
+        /// The message.
+        /// </value>
+        [JsonProperty( "message" )]
+        public new string Message { get; set; }
     }
 
     /// <summary>
@@ -2118,11 +2133,12 @@ namespace Rock.TransNational.Pi
     }
 
     /// <summary>
-    /// ToDo: This list might not be complete
+    /// 
     /// </summary>
     [JsonConverter( typeof( StringEnumConverter ) )]
     public enum BillingFrequency
     {
+        daily,
         monthly,
         twice_monthly
     }
@@ -2141,7 +2157,6 @@ namespace Rock.TransNational.Pi
     /// <summary>
     /// 
     /// </summary>
-
     [JsonConverter( typeof( StringEnumConverter ) )]
     public enum PiPaymentType
     {

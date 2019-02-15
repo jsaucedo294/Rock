@@ -1,6 +1,7 @@
 ﻿function initializeTokenizer(controlId) {
 
-    var $control = $('#' + controlId)
+    var $control = $('#' + controlId);
+    var postbackScript = $control.attr('data-postback-script');
 
     var enabledPaymentTypes = JSON.parse($('.js-enabled-payment-types', $control).val());;
 
@@ -24,6 +25,10 @@
         submission: (resp) => {
             $('.js-response-token', $control).val(resp.token);
             $('.js-tokenizer-raw-response', $control).val(JSON.stringify(resp, null, 2));
+
+            if (postbackScript) {
+                window.location = postbackScript;
+            }
         },
         settings: {
             payment: {

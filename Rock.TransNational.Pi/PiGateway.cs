@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Linq;
+using System.Reflection;
 using System.Web.UI;
 using Newtonsoft.Json;
 using RestSharp;
@@ -21,7 +22,8 @@ namespace Rock.TransNational.Pi
     /// 
     /// </summary>
     /// <seealso cref="Rock.Financial.GatewayComponent" />
-    [Description( "TransNational Pi Gateway" )]
+    [Description( "The TransNational Pi Gateway is the primary gateway to use with My Well giving." )]
+    [DisplayName( "TransNational Pi Gateway" )]
     [Export( typeof( GatewayComponent ) )]
     [ExportMetadata( "ComponentName", "TransNational Pi Gateway" )]
 
@@ -48,7 +50,7 @@ namespace Rock.TransNational.Pi
         )]
 
     #endregion Component Attributes
-    public class PiGateway : GatewayComponent, IHostedGatewayComponent, IGatewayComponent
+    public class PiGateway : GatewayComponent, IHostedGatewayComponent
     {
         #region Attribute Keys
 
@@ -133,7 +135,15 @@ namespace Rock.TransNational.Pi
         /// <returns></returns>
         public string GetHostedPaymentInfoToken( FinancialGateway financialGateway, Control hostedPaymentInfoControl )
         {
-            return ( hostedPaymentInfoControl as PiHostedPaymentControl ).PaymentInfoToken;
+            var tokenReponse = ( hostedPaymentInfoControl as PiHostedPaymentControl ).PaymentInfoTokenRaw.FromJsonOrNull<Pi.BaseResponseData>();
+            if ( tokenReponse?.IsSuccessStatus() != true )
+            {
+                throw new Exception( tokenReponse.Message );
+            }
+            else
+            {
+                return ( hostedPaymentInfoControl as PiHostedPaymentControl ).PaymentInfoToken;
+            }
         }
 
         /// <summary>
@@ -147,6 +157,22 @@ namespace Rock.TransNational.Pi
         {
             return $"submitTokenizer('{hostedPaymentInfoControl.ClientID}');";
         }
+
+        /// <summary>
+        /// Gets the URL that the Gateway Information UI will navigate to when they click the 'Learn More' link
+        /// </summary>
+        /// <value>
+        /// The learn more URL.
+        /// </value>
+        public string LearnMoreURL => "https://www.mywell.org";
+
+        /// <summary>
+        /// Gets the URL that the Gateway Information UI will navigate to when they click the 'Configure' link
+        /// </summary>
+        /// <value>
+        /// The configure URL.
+        /// </value>
+        public string ConfigureURL => "https://www.mywell.org/get-started/";
 
         #endregion IHostedGatewayComponent
 
@@ -254,7 +280,7 @@ namespace Rock.TransNational.Pi
 
             restRequest.AddJsonBody( transaction );
 
-            ToggleAllowUnsafeHeaderParsing( true );
+            //ToggleAllowUnsafeHeaderParsing( true );
 
             var response = restClient.Execute( restRequest );
 
@@ -337,16 +363,23 @@ namespace Rock.TransNational.Pi
             }
             else if ( scheduleTransactionFrequencyValueGuid == Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_TWICEMONTHLY.AsGuid() )
             {
+                // see https://sandbox.gotnpgateway.com/docs/api/#bill-once-month-on-the-1st-and-the-15th-until-canceled
                 billingFrequency = BillingFrequency.twice_monthly;
                 billingDays = "1,15";
             }
             else if ( scheduleTransactionFrequencyValueGuid == Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_WEEKLY.AsGuid() )
             {
-                //billingFrequency = BillingFrequency.daily;
+                // see https://sandbox.gotnpgateway.com/docs/api/#bill-once-every-7-days-until-canceled
+                billingCycleInterval = 1;
+                billingFrequency = BillingFrequency.daily;
+                billingDays = "7";
             }
             else if ( scheduleTransactionFrequencyValueGuid == Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_BIWEEKLY.AsGuid() )
             {
-                //billingFrequency = BillingFrequency.daily;
+                // see https://sandbox.gotnpgateway.com/docs/api/#bill-once-other-week-until-canceled
+                billingCycleInterval = 2;
+                billingFrequency = BillingFrequency.daily;
+                billingDays = "7";
             }
 
             billingPlanParameters.BillingFrequency = billingFrequency;
@@ -514,14 +547,34 @@ namespace Rock.TransNational.Pi
 
         #region utility
 
-        // Enable/disable useUnsafeHeaderParsing. Hopefully this isn't needed
         // Derived from http://o2platform.wordpress.com/2010/10/20/dealing-with-the-server-committed-a-protocol-violation-sectionresponsestatusline/
-        private void ToggleAllowUnsafeHeaderParsing( bool enable )
+        public static bool ToggleAllowUnsafeHeaderParsing( bool enable )
         {
-            var webConfigSettings = System.Web.Configuration.WebConfigurationManager.OpenWebConfiguration( "~" );
-            var systemNetConfiguration = webConfigSettings.GetSection( "system.net/settings" ) as System.Net.Configuration.SettingsSection;
-            systemNetConfiguration.HttpWebRequest.UseUnsafeHeaderParsing = enable;
-            //webConfigSettings.Save();
+            //Get the assembly that contains the internal class
+            Assembly aNetAssembly = Assembly.GetAssembly( typeof( System.Net.Configuration.SettingsSection ) );
+            if ( aNetAssembly != null )
+            {
+                //Use the assembly in order to get the internal type for the internal class
+                Type aSettingsType = aNetAssembly.GetType( "System.Net.Configuration.SettingsSectionInternal" );
+                if ( aSettingsType != null )
+                {
+                    //Use the internal static property to get an instance of the internal settings class.
+                    //If the static instance isn't created already the property will create it for us.
+                    object anInstance = aSettingsType.InvokeMember( "Section",
+                      BindingFlags.Static | BindingFlags.GetProperty | BindingFlags.NonPublic, null, null, new object[] { } );
+                    if ( anInstance != null )
+                    {
+                        //Locate the private bool field that tells the framework is unsafe header parsing should be allowed or not
+                        FieldInfo aUseUnsafeHeaderParsing = aSettingsType.GetField( "useUnsafeHeaderParsing", BindingFlags.NonPublic | BindingFlags.Instance );
+                        if ( aUseUnsafeHeaderParsing != null )
+                        {
+                            aUseUnsafeHeaderParsing.SetValue( anInstance, true );
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
         }
 
         #endregion utility
@@ -586,7 +639,7 @@ namespace Rock.TransNational.Pi
                 throw new ReferencePaymentInfoRequired();
             }
 
-            
+
 
             var response = this.PostTransaction( this.GetGatewayUrl( financialGateway ), this.GetPrivateApiKey( financialGateway ), TransactionType.sale, referencedPaymentInfo );
             if ( !response.IsSuccessStatus() )
@@ -629,7 +682,7 @@ namespace Rock.TransNational.Pi
             }
             else
             {
-                https://sandbox.gotnpgateway.com/docs/api/#refund
+                // https://sandbox.gotnpgateway.com/docs/api/#refund
                 response = this.PostRefund( this.GetGatewayUrl( financialGateway ), this.GetPrivateApiKey( financialGateway ), transactionId, origTransaction.TotalAmount );
             }
 
