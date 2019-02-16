@@ -178,7 +178,6 @@
 
         <script type="text/javascript">
             function displayToken() {
-                debugger;
                 var token = $('.js-response-token').val();
                 $('.js-token-output').val(token);
             };

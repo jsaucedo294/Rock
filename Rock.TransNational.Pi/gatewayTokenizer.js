@@ -1,6 +1,11 @@
 ﻿function initializeTokenizer(controlId) {
 
     var $control = $('#' + controlId);
+
+    if ($control.length == 0) {
+        // control hasn't been rendered so skip
+        return;
+    }
     var postbackScript = $control.attr('data-postback-script');
 
     var enabledPaymentTypes = JSON.parse($('.js-enabled-payment-types', $control).val());;

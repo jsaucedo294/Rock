@@ -94,38 +94,153 @@
 
                 <%-- Transaction Entry Panel --%>
                 <div class="col-sm-8">
-                    <h2>
-                        <asp:Literal ID="lIntroMessage" runat="server" /></h2>
 
-                    <%-- Collect Transaction Info --%>
+                    <%-- Collect Transaction Info (step 1) --%>
                     <asp:Panel ID="pnlPromptForAmounts" runat="server">
+
+                        <h2>
+                            <asp:Literal ID="lIntroMessage" runat="server" /></h2>
 
                         <Rock:CampusAccountAmountPicker ID="caapPromptForAccountAmounts" runat="server" />
 
                         <asp:Panel ID="pnlScheduledTransaction" runat="server">
 
-                            <Rock:ButtonDropDownList ID="ddlFrequency" runat="server" FormGroupCssClass=" margin-t-md" AutoPostBack="true" OnSelectionChanged="ddlFrequency_SelectionChanged" />
+                            <Rock:RockDropDownList ID="ddlFrequency" runat="server" FormGroupCssClass=" margin-t-md" AutoPostBack="true" OnSelectedIndexChanged="ddlFrequency_SelectionChanged" />
 
                             <div class="margin-t-md">
-                                <Rock:ButtonDropDownList ID="ddlPersonSavedAccount" runat="server" Label="Giving Method" />
+                                <Rock:RockDropDownList ID="ddlPersonSavedAccount" runat="server" Label="Giving Method" />
                                 <Rock:DatePicker ID="dtpStartDate" runat="server" Label="First Gift" AllowPastDateSelection="false" />
                             </div>
 
                         </asp:Panel>
+                        <Rock:NotificationBox ID="nbPromptForAmountsWarning" runat="server" NotificationBoxType="Validation" Visible="false" />
+                        <asp:LinkButton ID="btnGiveNow" runat="server" CssClass="btn btn-primary" Text="Give Now" OnClick="btnGiveNow_Click" />
                     </asp:Panel>
 
-                    <%-- Collect/Update Personal Information --%>
-                    <asp:Panel ID="pnlPersonalInformation" runat="server" Visible="false">
+
+                    <asp:Panel ID="pnlAmountSummary" runat="server" Visible="false">
+                        <div class="amount-summary-account-campus">
+                            <asp:Literal runat="server" ID="lAmountSummaryAccounts" />
+                            -
+                            <asp:Literal runat="server" ID="lAmountSummaryCampus" />
+                        </div>
+                        <div class="amount-summary-amount">
+                            <asp:Literal runat="server" ID="lAmountSummaryAmount" />
+                        </div>
                     </asp:Panel>
 
-                    <%-- Collect Payment Info --%>
-                    <asp:Panel ID="pnlPaymentInfo" runat="server" Visible="true">
+
+                    <%-- Collect Payment Info (step 2) --%>
+                    <asp:Panel ID="pnlPaymentInfo" runat="server" Visible="false">
+                        <Rock:PanelWidget ID="pwTestCards" runat="server" Title="Test Cards">
+                            <table class="grid-table table table-bordered table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Card Number</th>
+                                        <th>Card Brand</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>4111111111111111</td>
+                                        <td>visa</td>
+                                    </tr>
+                                    <tr>
+                                        <td>4005519200000004</td>
+                                        <td>visa</td>
+                                    </tr>
+                                    <tr>
+                                        <td>4009348888881881</td>
+                                        <td>visa</td>
+                                    </tr>
+                                    <tr>
+                                        <td>4012000033330026</td>
+                                        <td>visa</td>
+                                    </tr>
+                                    <tr>
+                                        <td>4012000077777777</td>
+                                        <td>visa</td>
+                                    </tr>
+                                    <tr>
+                                        <td>4012888888881881</td>
+                                        <td>visa</td>
+                                    </tr>
+                                    <tr>
+                                        <td>4217651111111119</td>
+                                        <td>visa</td>
+                                    </tr>
+                                    <tr>
+                                        <td>4500600000000061</td>
+                                        <td>visa</td>
+                                    </tr>
+                                    <tr>
+                                        <td>5555555555554444</td>
+                                        <td>mastercard</td>
+                                    </tr>
+                                    <tr>
+                                        <td>2223000048400011</td>
+                                        <td>mastercard</td>
+                                    </tr>
+                                    <tr>
+                                        <td>378282246310005</td>
+                                        <td>amex</td>
+                                    </tr>
+                                    <tr>
+                                        <td>371449635398431</td>
+                                        <td>amex</td>
+                                    </tr>
+                                    <tr>
+                                        <td>6011111111111117</td>
+                                        <td>discover</td>
+                                    </tr>
+                                    <tr>
+                                        <td>36259600000004</td>
+                                        <td>diners</td>
+                                    </tr>
+                                    <tr>
+                                        <td>3530111333300000</td>
+                                        <td>jcb</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </Rock:PanelWidget>
                         <h1>##Hosted Payment Control##</h1>
                         <div style="border-width: thick; border-color: red; border-style: solid;" class="margin-b-md">
                             <Rock:DynamicPlaceholder ID="phHostedPaymentControl" runat="server" />
                         </div>
 
-                        <asp:LinkButton ID="btnGetPaymentInfoNext" runat="server" Text="Next" CssClass="btn btn-primary js-submit-hostedpaymentinfo" OnClick="btnGetPaymentInfoNext_Click" />
+                        <Rock:NotificationBox ID="nbPaymentTokenError" runat="server" NotificationBoxType="Validation" Visible="false" />
+
+                        <div class="navigation actions">
+                            <asp:LinkButton ID="btnGetPaymentInfoBack" runat="server" CssClass="btn btn-default" Text="Back" OnClick="btnGetPaymentInfoBack_Click" />
+
+                            <%-- NOTE: btnGetPaymentInfoNext ends up telling the HostedPaymentControl (via the js-submit-hostedpaymentinfo hook) to request a token, which will cause the _hostedPaymentInfoControl_TokenReceived postback --%>
+                            <a id="btnGetPaymentInfoNext" runat="server" class="btn btn-primary js-submit-hostedpaymentinfo">Next</a>
+                        </div>
+                    </asp:Panel>
+
+                    <%-- Collect/Update Personal Information (step 3) --%>
+                    <asp:Panel ID="pnlPersonalInformation" runat="server" Visible="false">
+                        <Rock:RockTextBox ID="tbFirstName" runat="server" Placeholder="First Name" />
+                        <Rock:RockTextBox ID="tbLastName" runat="server" Placeholder="Last Name" />
+                        <Rock:AddressControl ID="acAddress" runat="server" UseStateAbbreviation="true" UseCountryAbbreviation="false" Label="Address" />
+                        <Rock:PhoneNumberBox ID="pnbPhone" runat="server" Placeholder="Phone" />
+                        <Rock:EmailBox ID="tbEmail" runat="server" Placeholder="Email" />
+
+                        <Rock:NotificationBox ID="nbProcessTransactionError" runat="server" NotificationBoxType="Danger" Visible="false" />
+
+                        <div class="navigate-actions actions">
+                            <asp:LinkButton ID="btnPersonalInformationBack" runat="server" CssClass="btn btn-default" Text="Back" OnClick="btnPersonalInformationBack_Click" />
+                            <asp:LinkButton ID="btnPersonalInformationNext" runat="server" CssClass="btn btn-primary" Text="Finish" OnClick="btnPersonalInformationNext_Click" />
+                        </div>
+                    </asp:Panel>
+
+                    <%-- Transaction Summary (step 4) --%>
+                    <asp:Panel ID="pnlTransactionSummary" runat="server" Visible="false">
+                        <asp:HiddenField ID="hfTransactionGuid" runat="server" />
+                        <asp:Literal ID="lTransactionSummaryHTML" runat="server" />
+
+                        <%-- TODO Make Giving Easier --%>
                     </asp:Panel>
 
                 </div>
@@ -173,7 +288,6 @@
                 });
 
                 $('.js-submit-hostedpaymentinfo').click(function () {
-                    debugger
                     <%=HostPaymentInfoSubmitScript%>
                 });
 

@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // </copyright>
-//
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -21,10 +20,12 @@ using System.Data.Entity;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Financial;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Web.Cache;
 using Rock.Web.UI;
@@ -158,7 +159,62 @@ namespace RockWeb.Blocks.Finance
         Category = AttributeCategory.TextOptions,
         Order = 17 )]
 
+    [SystemEmailField(
+        "Receipt Email",
+        Key = AttributeKey.ReceiptEmail,
+        Description = "The system email to use to send the receipt.",
+        IsRequired = false,
+        Category = AttributeCategory.EmailTemplates,
+        Order = 18 )]
+
+    [DefinedValueField( "Financial Source Type",
+        Key = AttributeKey.FinancialSourceType,
+        Description = "The Financial Source Type to use when creating transactions",
+        IsRequired = false,
+        AllowMultiple = false,
+        DefaultValue = Rock.SystemGuid.DefinedValue.FINANCIAL_SOURCE_TYPE_WEBSITE,
+        Category = AttributeCategory.None,
+        Order = 19 )]
+
     #endregion Block Attributes
+
+    #region Advanced Block Attributes
+
+    [DefinedValueField(
+        "Transaction Type",
+        Key = AttributeKey.TransactionType,
+        Description = "",
+        IsRequired = true,
+        AllowMultiple = false,
+        DefinedTypeGuid = Rock.SystemGuid.DefinedType.FINANCIAL_TRANSACTION_TYPE,
+        DefaultValue = Rock.SystemGuid.DefinedValue.TRANSACTION_TYPE_CONTRIBUTION,
+        Category = AttributeCategory.Advanced,
+        Order = 100 )]
+
+    [EntityTypeField(
+        "Transaction Entity Type",
+        Key = AttributeKey.TransactionEntityType,
+        Description = "The Entity Type for the Transaction Detail Record (usually left blank)",
+        IsRequired = false,
+        Category = AttributeCategory.Advanced,
+        Order = 101 )]
+
+    [TextField( "Entity Id Param",
+        Key = AttributeKey.EntityIdParam,
+        Description = "The Page Parameter that will be used to set the EntityId value for the Transaction Detail Record (requires Transaction Entry Type to be configured)",
+        IsRequired = false,
+        Category = AttributeCategory.Advanced,
+        Order = 102 )]
+
+    [AttributeField( "Allowed Transaction Attributes From URL",
+        Key = AttributeKey.AllowedTransactionAttributesFromURL,
+        Description = "Specify any Transaction Attributes that can be populated from the URL.  The URL should be formatted like: ?Attribute_AttributeKey1=hello&Attribute_AttributeKey2=world",
+        IsRequired = false,
+        AllowMultiple = true,
+        Category = AttributeCategory.Advanced,
+        Order = 103 )]
+
+    #endregion
     public partial class TransactionEntryV2 : RockBlock
     {
         #region constants
@@ -172,7 +228,7 @@ namespace RockWeb.Blocks.Finance
 
 <h1>Thank You!</h1>
 
-<p>Your support is helping Rock Solid Church Demo actively achieve our
+<p>Your support is helping {{ 'Global' | Attribute:'OrganizationName' }} actively achieve our
 mission. We are so grateful for your commitment.</p>
 
 <dl>
@@ -180,10 +236,10 @@ mission. We are so grateful for your commitment.</p>
     <dd>{{ Transaction.TransactionCode }}</dd>
 
     <dt>Name</dt>
-    <dd>{{ PaymentInfo.FullName }}</dd>
+    <dd>{{ Person.FullName }}</dd>
     <dd></dd>
-    <dd>{{ PaymentInfo.Email }}</dd>
-    <dd>{{ PaymentInfo.Street }} {{ PaymentInfo.City }}, {{ PaymentInfo.State }} {{ PaymentInfo.PostalCode }}</dd>
+    <dd>{{ Person.Email }}</dd>
+    <dd>{{ BillingLocation.Street }} {{ BillingLocation.City }}, {{ BillingLocation.State }} {{ BillingLocation.PostalCode }}</dd>
 <dl>
 
 <dl class='dl-horizontal'>
@@ -193,11 +249,11 @@ mission. We are so grateful for your commitment.</p>
     {% endfor %}
 
     <dt>Payment Method</dt>
-    <dd>{{ PaymentInfo.CurrencyTypeValue.Description}}</dd>
+    <dd>{{ PaymentDetail.CurrencyTypeValue.Description}}</dd>
 
-    {% if PaymentInfo.MaskedNumber != '' %}
+    {% if PaymentDetail.AccountNumberMasked != '' %}
         <dt>Account Number</dt>
-        <dd>{{ PaymentInfo.MaskedNumber }}</dd>
+        <dd>{{ PaymentInfo.AccountNumberMasked }}</dd>
     {% endif %}
 
     <dt>When<dt>
@@ -250,6 +306,16 @@ mission. We are so grateful for your commitment.</p>
             public const string FinishLavaTemplate = "FinishLavaTemplate";
 
             public const string SaveAccountTitle = "SaveAccountTitle";
+
+            public const string TransactionType = "Transaction Type";
+
+            public const string TransactionEntityType = "TransactionEntityType";
+
+            public const string EntityIdParam = "EntityIdParam";
+
+            public const string AllowedTransactionAttributesFromURL = "AllowedTransactionAttributesFromURL";
+
+            public const string ReceiptEmail = "ReceiptEmail";
         }
 
         #endregion Attribute Keys
@@ -258,7 +324,10 @@ mission. We are so grateful for your commitment.</p>
 
         public static class AttributeCategory
         {
+            public const string None = "";
             public const string TextOptions = "Text Options";
+            public const string Advanced = "Advanced";
+            public const string EmailTemplates = "EmailTemplates";
         }
 
         #endregion Attribute Categories
@@ -268,13 +337,44 @@ mission. We are so grateful for your commitment.</p>
         public static class PageParameterKey
         {
             public const string Person = "Person";
+            public const string AttributeKeyPrefix = "Attribute_";
         }
 
         #endregion
 
+        #region enums
+
+        /// <summary>
+        /// 
+        /// </summary>
+        private enum EntryStep
+        {
+            /// <summary>
+            /// prompt for amounts (step 1)
+            /// </summary>
+            PromptForAmounts,
+
+            /// <summary>
+            /// Get payment information (step 2)
+            /// </summary>
+            GetPaymentInfo,
+
+            /// <summary>
+            /// Get/Update personal information (step 3)
+            /// </summary>
+            GetPersonalInformation,
+
+            /// <summary>
+            /// The show transaction summary (step 4)
+            /// </summary>
+            ShowTransactionSummary
+        }
+
+        #endregion enums
+
         #region fields
 
-        Control _hostedPaymentInfoControl;
+        private Control _hostedPaymentInfoControl;
 
         /// <summary>
         /// use FinancialGateway instead
@@ -323,9 +423,9 @@ mission. We are so grateful for your commitment.</p>
             }
         }
 
-        #endregion fields
+        #endregion Fields
 
-        #region Base Control Methods
+        #region Properties
 
         /// <summary>
         /// Gets or sets the host payment information submit JavaScript.
@@ -345,6 +445,19 @@ mission. We are so grateful for your commitment.</p>
                 ViewState["HostPaymentInfoSubmitScript"] = value;
             }
         }
+
+        /// <summary>
+        /// Gets or sets the payment transaction code.
+        /// </summary>
+        protected string TransactionCode
+        {
+            get { return ViewState["TransactionCode"] as string ?? string.Empty; }
+            set { ViewState["TransactionCode"] = value; }
+        }
+
+        #endregion Properties
+
+        #region Base Control Methods
 
         /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Init" /> event.
@@ -377,9 +490,27 @@ mission. We are so grateful for your commitment.</p>
             caapPromptForAccountAmounts.SelectableAccountIds = selectableAccountIds;
         }
 
+        /// <summary>
+        /// Handles the TokenReceived event of the _hostedPaymentInfoControl control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private void _hostedPaymentInfoControl_TokenReceived( object sender, EventArgs e )
         {
-            string token = this.FinancialGatewayComponent.GetHostedPaymentInfoToken( this.FinancialGateway, _hostedPaymentInfoControl );
+            string errorMessage = null;
+            string token = this.FinancialGatewayComponent.GetHostedPaymentInfoToken( this.FinancialGateway, _hostedPaymentInfoControl, out errorMessage );
+            if ( errorMessage.IsNotNullOrWhiteSpace() )
+            {
+                nbPaymentTokenError.Text = errorMessage;
+                nbPaymentTokenError.Visible = true;
+            }
+            else
+            {
+                nbPaymentTokenError.Visible = false;
+                btnGetPaymentInfoNext_Click( sender, e );
+            }
+
+            // TODO...
         }
 
         /// <summary>
@@ -392,6 +523,9 @@ mission. We are so grateful for your commitment.</p>
 
             if ( !Page.IsPostBack )
             {
+                // Ensure that there is only one transaction processed by getting a unique guid when this block loads for the first time
+                // This will ensure there are no (unintended) duplicate transactions
+                hfTransactionGuid.Value = Guid.NewGuid().ToString();
                 ShowDetails();
             }
         }
@@ -503,7 +637,6 @@ mission. We are so grateful for your commitment.</p>
             lGatewayName.Text = Reflection.GetDisplayName( gatewayEntityTypeType );
             lGatewayDescription.Text = Reflection.GetDescription( gatewayEntityTypeType );
 
-
             HyperLink aGatewayConfigure = e.Item.FindControl( "aGatewayConfigure" ) as HyperLink;
             HyperLink aGatewayLearnMore = e.Item.FindControl( "aGatewayLearnMore" ) as HyperLink;
             aGatewayConfigure.Visible = financialGatewayComponent.ConfigureURL.IsNotNullOrWhiteSpace();
@@ -567,12 +700,10 @@ mission. We are so grateful for your commitment.</p>
             pnlGatewayHelp.Visible = true;
             pnlTransactionEntry.Visible = false;
 
-            //Dictionary<string, IHostedGatewayComponent>
             var hostedGatewayComponentList = Rock.Financial.GatewayContainer.Instance.Components
                 .Select( a => a.Value.Value )
                 .Where( a => a is IHostedGatewayComponent )
                 .Select( a => a as IHostedGatewayComponent ).ToList();
-
 
             rptInstalledGateways.DataSource = hostedGatewayComponentList;
             rptInstalledGateways.DataBind();
@@ -764,7 +895,6 @@ mission. We are so grateful for your commitment.</p>
         private void SetTargetPerson()
         {
             // If impersonation is allowed, and a valid person key was used, set the target to that person
-
             Person targetPerson = null;
 
             if ( GetAttributeValue( AttributeKey.AllowImpersonation ).AsBoolean() )
@@ -854,8 +984,9 @@ mission. We are so grateful for your commitment.</p>
                 a.Id,
                 a.Name,
                 a.FinancialPaymentDetail.AccountNumberMasked,
-            } );
+            } ).ToList();
 
+            // Only show the SavedAccount picker if there are saved accounts. If there aren't any (or if they choose 'Use a different payment method'), a later step will prompt them to enter Payment Info (CC/ACH fields)
             ddlPersonSavedAccount.Visible = personSavedAccountList.Any();
 
             ddlPersonSavedAccount.Items.Clear();
@@ -873,7 +1004,6 @@ mission. We are so grateful for your commitment.</p>
             }
             else
             {
-
                 ddlPersonSavedAccount.SelectedIndex = 0;
             }
         }
@@ -895,6 +1025,22 @@ mission. We are so grateful for your commitment.</p>
             }
 
             caapPromptForAccountAmounts.CampusId = defaultCampus.Id;
+        }
+
+        /// <summary>
+        /// Navigates to step.
+        /// </summary>
+        /// <param name="entryStep">The entry step.</param>
+        private void NavigateToStep( EntryStep entryStep )
+        {
+            pnlPromptForAmounts.Visible = entryStep == EntryStep.PromptForAmounts;
+
+            pnlAmountSummary.Visible = entryStep == EntryStep.GetPersonalInformation
+                || entryStep == EntryStep.GetPaymentInfo;
+
+            pnlPersonalInformation.Visible = entryStep == EntryStep.GetPersonalInformation;
+            pnlPaymentInfo.Visible = entryStep == EntryStep.GetPaymentInfo;
+            pnlTransactionSummary.Visible = entryStep == EntryStep.ShowTransactionSummary;
         }
 
         /// <summary>
@@ -929,7 +1075,6 @@ mission. We are so grateful for your commitment.</p>
                 dtpStartDate.Label = "Start Giving On";
             }
 
-
             // if scheduling recurring, it can't start today since the gateway will be taking care of automated giving, it might have already processed today's transaction. So make sure it is no earlier than tomorrow.
             if ( !oneTime && ( !dtpStartDate.SelectedDate.HasValue || dtpStartDate.SelectedDate.Value.Date <= RockDateTime.Today ) )
             {
@@ -949,9 +1094,359 @@ mission. We are so grateful for your commitment.</p>
 
         #endregion Transaction Entry Related
 
+        #region Navigation
+
+        /// <summary>
+        /// Handles the Click event of the btnGiveNow control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void btnGiveNow_Click( object sender, EventArgs e )
+        {
+            if ( caapPromptForAccountAmounts.IsValidAmountSelected() )
+            {
+                var totalAmount = caapPromptForAccountAmounts.AccountAmounts.Sum( a => a.Amount ?? 0.00M );
+
+                // get the accountId(s) that have an amount specified
+                var amountAccountIds = caapPromptForAccountAmounts.AccountAmounts
+                    .Where( a => a.Amount.HasValue && a.Amount != 0.00M ).Select( a => a.AccountId )
+                    .ToList();
+
+                var accountNames = new FinancialAccountService( new RockContext() )
+                    .GetByIds( amountAccountIds )
+                    .Select( a => a.PublicName )
+                    .ToList().AsDelimited( ", ", " and " );
+
+                lAmountSummaryAccounts.Text = accountNames;
+                lAmountSummaryAmount.Text = totalAmount.FormatAsCurrency();
+                if ( caapPromptForAccountAmounts.CampusId.HasValue )
+                {
+                    lAmountSummaryCampus.Text = CampusCache.Get( caapPromptForAccountAmounts.CampusId.Value ).Name;
+                }
+
+                NavigateToStep( EntryStep.GetPaymentInfo );
+                nbPromptForAmountsWarning.Visible = false;
+            }
+            else
+            {
+                nbPromptForAmountsWarning.Visible = true;
+                nbPromptForAmountsWarning.Text = "Please specify an amount";
+            }
+        }
+
+        /// <summary>
+        /// Handles the Click event of the btnGetPaymentInfoBack control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void btnGetPaymentInfoBack_Click( object sender, EventArgs e )
+        {
+            NavigateToStep( EntryStep.PromptForAmounts );
+        }
+
+        /// <summary>
+        /// Handles the Click event of the btnGetPaymentInfoNext control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnGetPaymentInfoNext_Click( object sender, EventArgs e )
         {
+            //// NOTE: the btnGetPaymentInfoNext button tells _hostedPaymentInfoControl to get a token via javascript
+            //// When _hostedPaymentInfoControl gets a token response, the _hostedPaymentInfoControl_TokenReceived event will be triggered
+            //// If _hostedPaymentInfoControl_TokenReceived gets a valid token, it will call btnGetPaymentInfoNext_Click
 
+            NavigateToStep( EntryStep.GetPersonalInformation );
         }
+
+        /// <summary>
+        /// Handles the Click event of the btnPersonalInformationBack control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void btnPersonalInformationBack_Click( object sender, EventArgs e )
+        {
+            NavigateToStep( EntryStep.GetPaymentInfo );
+        }
+
+        /// <summary>
+        /// Handles the Click event of the btnPersonalInformationNext control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void btnPersonalInformationNext_Click( object sender, EventArgs e )
+        {
+            if ( ProcessTransaction() )
+            {
+                ShowTransactionSummary();
+            }
+        }
+
+        #endregion navigation
+
+        /// <summary>
+        /// Processes the transaction.
+        /// </summary>
+        /// <returns></returns>
+        protected bool ProcessTransaction()
+        {
+            var transactionGuid = hfTransactionGuid.Value.AsGuid();
+            var rockContext = new RockContext();
+            FinancialTransaction transactionAlreadyExists = new FinancialTransactionService( rockContext ).Queryable().FirstOrDefault( a => a.Guid == transactionGuid );
+
+            if ( transactionAlreadyExists != null )
+            {
+                return true;
+            }
+
+            string errorMessage;
+            var paymentToken = this.FinancialGatewayComponent.GetHostedPaymentInfoToken( this.FinancialGateway, _hostedPaymentInfoControl, out errorMessage );
+
+            var paymentInfo = new ReferencePaymentInfo
+            {
+                ReferenceNumber = paymentToken,
+                FirstName = tbFirstName.Text,
+                LastName = tbLastName.Text,
+                Street1 = acAddress.Street1,
+                Street2 = acAddress.Street2,
+                City = acAddress.City,
+                State = acAddress.State,
+                PostalCode = acAddress.PostalCode,
+                Country = acAddress.Country,
+                Email = tbEmail.Text,
+                Phone = pnbPhone.Text
+            };
+
+
+            var financialTransaction = this.FinancialGatewayComponent.Charge( this.FinancialGateway, paymentInfo, out errorMessage );
+            nbProcessTransactionError.Visible = financialTransaction == null;
+            if ( financialTransaction == null )
+            {
+                nbProcessTransactionError.Text = errorMessage ?? "Unknown Error";
+                return false;
+            }
+            else
+            {
+                int? targetPersonId = hfTargetPersonId.Value.AsIntegerOrNull();
+                int personId;
+
+                if ( !targetPersonId.HasValue )
+                {
+                    var personService = new PersonService( rockContext );
+                    var personQuery = new PersonService.PersonMatchQuery( paymentInfo.FirstName, paymentInfo.LastName, paymentInfo.Email, paymentInfo.Phone.Trim() );
+                    var matchingPerson = personService.FindPerson( personQuery, true );
+
+                    // TODO, if no matching person, create one, and also factor in business logic
+                    personId = matchingPerson.Id;
+                }
+                else
+                {
+                    personId = targetPersonId.Value;
+                }
+                
+                SaveTransaction( personId, paymentInfo, financialTransaction );
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Shows the transaction summary.
+        /// </summary>
+        /// <param name="financialTransaction">The financial transaction.</param>
+        /// <param name="paymentInfo">The payment information.</param>
+        protected void ShowTransactionSummary()
+        {
+            // TODO
+            var rockContext = new RockContext();
+            var transactionGuid = hfTransactionGuid.Value.AsGuid();
+
+            var mergeFields = LavaHelper.GetCommonMergeFields( this.RockPage, this.CurrentPerson, new CommonMergeFieldsOptions { GetLegacyGlobalMergeFields = false } );
+            var finishLavaTemplate = this.GetAttributeValue( AttributeKey.FinishLavaTemplate );
+
+            // the transactionGuid is either for a FinancialTransaction or a FinancialScheduledTransaction
+            FinancialPaymentDetail financialPaymentDetail;
+            FinancialTransaction financialTransaction = new FinancialTransactionService( rockContext ).Get( transactionGuid );
+            if ( financialTransaction != null)
+            {
+                mergeFields.Add( "Transaction", financialTransaction );
+                mergeFields.Add( "Person", financialTransaction.AuthorizedPersonAlias.Person );
+                financialPaymentDetail = financialTransaction.FinancialPaymentDetail;
+            }
+            else
+            {
+                FinancialScheduledTransaction financialScheduledTransaction = new FinancialScheduledTransactionService( rockContext ).Get( transactionGuid );
+                mergeFields.Add( "Transaction", financialScheduledTransaction );
+                mergeFields.Add( "Person", financialScheduledTransaction.AuthorizedPersonAlias.Person );
+                financialPaymentDetail = financialScheduledTransaction.FinancialPaymentDetail;
+            }
+            
+            mergeFields.Add( "PaymentDetail", financialPaymentDetail );
+            mergeFields.Add( "BillingLocation", financialPaymentDetail.BillingLocation );
+
+            lTransactionSummaryHTML.Text = finishLavaTemplate.ResolveMergeFields( mergeFields );
+
+            NavigateToStep( EntryStep.ShowTransactionSummary );
+        }
+
+        #region cleanup
+
+        /// <summary>
+        /// Saves the transaction.
+        /// </summary>
+        /// <param name="person">The person.</param>
+        /// <param name="paymentInfo">The payment information.</param>
+        /// <param name="transaction">The transaction.</param>
+        private void SaveTransaction( int personId, PaymentInfo paymentInfo, FinancialTransaction transaction )
+        {
+            FinancialGateway financialGateway = this.FinancialGateway;
+            IHostedGatewayComponent gateway = this.FinancialGatewayComponent;
+            var rockContext = new RockContext();
+
+            // manually assign the Guid that we generated at the beginning of the transaction UI entry to help make duplicate transactions impossible
+            transaction.Guid = hfTransactionGuid.Value.AsGuid();
+
+            transaction.AuthorizedPersonAliasId = new PersonAliasService( rockContext ).GetPrimaryAliasId( personId );
+            // TODO: transaction.ShowAsAnonymous = cbGiveAnonymously.Checked;
+            transaction.TransactionDateTime = RockDateTime.Now;
+            transaction.FinancialGatewayId = financialGateway.Id;
+
+            var txnType = DefinedValueCache.Get( this.GetAttributeValue( AttributeKey.TransactionType ).AsGuidOrNull() ?? Rock.SystemGuid.DefinedValue.TRANSACTION_TYPE_CONTRIBUTION.AsGuid() );
+            transaction.TransactionTypeValueId = txnType.Id;
+
+            transaction.Summary = paymentInfo.Comment1;
+
+            if ( transaction.FinancialPaymentDetail == null )
+            {
+                transaction.FinancialPaymentDetail = new FinancialPaymentDetail();
+            }
+
+            transaction.FinancialPaymentDetail.SetFromPaymentInfo( paymentInfo, gateway as GatewayComponent, rockContext );
+
+            Guid? sourceGuid = GetAttributeValue( AttributeKey.FinancialSourceType ).AsGuidOrNull();
+            if ( sourceGuid.HasValue )
+            {
+                transaction.SourceTypeValueId = DefinedValueCache.GetId( sourceGuid.Value );
+            }
+
+            var transactionEntity = this.GetTransactionEntity();
+            var selectedAccountAmounts = caapPromptForAccountAmounts.AccountAmounts;
+
+            foreach ( var selectedAccountAmount in selectedAccountAmounts.Where( a => a.Amount.HasValue && a.Amount != 0 ) )
+            {
+                var transactionDetail = new FinancialTransactionDetail();
+                transactionDetail.Amount = selectedAccountAmount.Amount.Value;
+                transactionDetail.AccountId = selectedAccountAmount.AccountId;
+
+                if ( transactionEntity != null )
+                {
+                    transactionDetail.EntityTypeId = transactionEntity.TypeId;
+                    transactionDetail.EntityId = transactionEntity.Id;
+                }
+
+                transaction.TransactionDetails.Add( transactionDetail );
+            }
+
+            var batchService = new FinancialBatchService( rockContext );
+
+            // Get the batch
+            var batch = batchService.Get(
+                GetAttributeValue( AttributeKey.BatchNamePrefix ),
+                paymentInfo.CurrencyTypeValue,
+                paymentInfo.CreditCardTypeValue,
+                transaction.TransactionDateTime.Value,
+                financialGateway.GetBatchTimeOffset() );
+
+            var batchChanges = new History.HistoryChangeList();
+
+            if ( batch.Id == 0 )
+            {
+                batchChanges.AddChange( History.HistoryVerb.Add, History.HistoryChangeType.Record, "Batch" );
+                History.EvaluateChange( batchChanges, "Batch Name", string.Empty, batch.Name );
+                History.EvaluateChange( batchChanges, "Status", null, batch.Status );
+                History.EvaluateChange( batchChanges, "Start Date/Time", null, batch.BatchStartDateTime );
+                History.EvaluateChange( batchChanges, "End Date/Time", null, batch.BatchEndDateTime );
+            }
+
+            decimal newControlAmount = batch.ControlAmount + transaction.TotalAmount;
+            History.EvaluateChange( batchChanges, "Control Amount", batch.ControlAmount.FormatAsCurrency(), newControlAmount.FormatAsCurrency() );
+            batch.ControlAmount = newControlAmount;
+
+            transaction.BatchId = batch.Id;
+            transaction.LoadAttributes( rockContext );
+
+            var allowedTransactionAttributes = GetAttributeValue( AttributeKey.AllowedTransactionAttributesFromURL ).Split( ',' ).AsGuidList().Select( x => AttributeCache.Get( x ).Key );
+
+            foreach ( KeyValuePair<string, AttributeValueCache> attr in transaction.AttributeValues )
+            {
+                if ( PageParameters().ContainsKey( PageParameterKey.AttributeKeyPrefix + attr.Key ) && allowedTransactionAttributes.Contains( attr.Key ) )
+                {
+                    attr.Value.Value = Server.UrlDecode( PageParameter( PageParameterKey.AttributeKeyPrefix + attr.Key ) );
+                }
+            }
+
+            batch.Transactions.Add( transaction );
+
+            rockContext.SaveChanges();
+            transaction.SaveAttributeValues();
+
+            HistoryService.SaveChanges(
+                rockContext,
+                typeof( FinancialBatch ),
+                Rock.SystemGuid.Category.HISTORY_FINANCIAL_BATCH.AsGuid(),
+                batch.Id,
+                batchChanges );
+
+            SendReceipt( transaction.Id );
+
+            TransactionCode = transaction.TransactionCode;
+        }
+
+        /// <summary>
+        /// Gets the transaction entity.
+        /// </summary>
+        /// <returns></returns>
+        private IEntity GetTransactionEntity()
+        {
+            IEntity transactionEntity = null;
+            Guid? transactionEntityTypeGuid = GetAttributeValue( AttributeKey.TransactionEntityType ).AsGuidOrNull();
+            if ( transactionEntityTypeGuid.HasValue )
+            {
+                var transactionEntityType = EntityTypeCache.Get( transactionEntityTypeGuid.Value );
+                if ( transactionEntityType != null )
+                {
+                    var entityId = this.PageParameter( this.GetAttributeValue( AttributeKey.EntityIdParam ) ).AsIntegerOrNull();
+                    if ( entityId.HasValue )
+                    {
+                        var dbContext = Reflection.GetDbContextForEntityType( transactionEntityType.GetEntityType() );
+                        IService serviceInstance = Reflection.GetServiceForEntityType( transactionEntityType.GetEntityType(), dbContext );
+                        if ( serviceInstance != null )
+                        {
+                            System.Reflection.MethodInfo getMethod = serviceInstance.GetType().GetMethod( "Get", new Type[] { typeof( int ) } );
+                            transactionEntity = getMethod.Invoke( serviceInstance, new object[] { entityId.Value } ) as Rock.Data.IEntity;
+                        }
+                    }
+                }
+            }
+
+            return transactionEntity;
+        }
+
+        /// <summary>
+        /// Sends the receipt.
+        /// </summary>
+        /// <param name="transactionId">The transaction identifier.</param>
+        private void SendReceipt( int transactionId )
+        {
+            Guid? receiptEmail = GetAttributeValue( AttributeKey.ReceiptEmail ).AsGuidOrNull();
+            if ( receiptEmail.HasValue )
+            {
+                // Queue a transaction to send receipts
+                var newTransactionIds = new List<int> { transactionId };
+                var sendPaymentReceiptsTxn = new Rock.Transactions.SendPaymentReceipts( receiptEmail.Value, newTransactionIds );
+                Rock.Transactions.RockQueue.TransactionQueue.Enqueue( sendPaymentReceiptsTxn );
+            }
+        }
+
+        #endregion
     }
 }

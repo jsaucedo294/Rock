@@ -133,12 +133,23 @@ namespace Rock.TransNational.Pi
         /// <param name="financialGateway">The financial gateway.</param>
         /// <param name="hostedPaymentInfoControl">The hosted payment information control.</param>
         /// <returns></returns>
-        public string GetHostedPaymentInfoToken( FinancialGateway financialGateway, Control hostedPaymentInfoControl )
+        public string GetHostedPaymentInfoToken( FinancialGateway financialGateway, Control hostedPaymentInfoControl, out string errorMessage )
         {
-            var tokenReponse = ( hostedPaymentInfoControl as PiHostedPaymentControl ).PaymentInfoTokenRaw.FromJsonOrNull<Pi.BaseResponseData>();
-            if ( tokenReponse?.IsSuccessStatus() != true )
+            errorMessage = null;
+            var tokenResponse = ( hostedPaymentInfoControl as PiHostedPaymentControl ).PaymentInfoTokenRaw.FromJsonOrNull<Pi.TokenizerResponse>();
+            if ( tokenResponse?.IsSuccessStatus() != true )
             {
-                throw new Exception( tokenReponse.Message );
+                if ( tokenResponse.HasValidationError() )
+                {
+                    if ( tokenResponse.Invalid.Any() )
+                    {
+                        errorMessage = $"Invalid {tokenResponse.Invalid.ToList().AsDelimited( "," ) }";
+                        return null;
+                    }
+                }
+
+                errorMessage = $"Failure: {tokenResponse?.Message ?? "null response from GetHostedPaymentInfoToken"}";
+                return null;
             }
             else
             {
@@ -611,11 +622,8 @@ namespace Rock.TransNational.Pi
             {
                 var values = new List<DefinedValueCache>();
                 values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_ONE_TIME ) );
-
-                // TODO enable these when Pi add these
-                //values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_WEEKLY ) );
-                //values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_BIWEEKLY ) );
-
+                values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_WEEKLY ) );
+                values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_BIWEEKLY ) );
                 values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_TWICEMONTHLY ) );
                 values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_MONTHLY ) );
                 return values;

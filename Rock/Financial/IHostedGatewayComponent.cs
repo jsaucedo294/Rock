@@ -33,8 +33,9 @@ namespace Rock.Financial
         /// </summary>
         /// <param name="financialGateway">The financial gateway.</param>
         /// <param name="hostedPaymentInfoControl">The hosted payment information control.</param>
+        /// <param name="errorMessage">The error message.</param>
         /// <returns></returns>
-        string GetHostedPaymentInfoToken( FinancialGateway financialGateway, Control hostedPaymentInfoControl );
+        string GetHostedPaymentInfoToken( FinancialGateway financialGateway, Control hostedPaymentInfoControl, out string errorMessage );
 
         /// <summary>
         /// Gets the URL that the Gateway Information UI will navigate to when they click the 'Configure' link

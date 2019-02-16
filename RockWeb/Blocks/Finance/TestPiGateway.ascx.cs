@@ -117,7 +117,16 @@ namespace RockWeb.Blocks.Finance
         {
             var gatewayComponent = GetFinancialGatewayComponent();
             var gateway = GetFinancialGateway();
-            lTokenOutput.Text = gatewayComponent.GetHostedPaymentInfoToken( gateway, _hostedPaymentInfoControl );
+            string errorMessage;
+            var paymentToken = gatewayComponent.GetHostedPaymentInfoToken( gateway, _hostedPaymentInfoControl, out errorMessage );
+            if ( errorMessage.IsNotNullOrWhiteSpace() )
+            {
+                lTokenOutput.Text = errorMessage;
+            }
+            else
+            {
+                lTokenOutput.Text = paymentToken;
+            }
         }
 
         private void TestPiGateway_BlockUpdated( object sender, EventArgs e )
@@ -203,10 +212,19 @@ namespace RockWeb.Blocks.Finance
             nbAmountRequired.Visible = false;
 
             var amount = caapAccountInfo.SelectedAmount.Value;
+            string tokenErrorMessage;
+            var paymentToken = gatewayComponent.GetHostedPaymentInfoToken( gateway, _hostedPaymentInfoControl, out tokenErrorMessage );
+
+            if (tokenErrorMessage.IsNotNullOrWhiteSpace())
+            {
+                ceSaleResponse.Text = tokenErrorMessage;
+                return;
+            }
+
             var referencePaymentInfo = new ReferencePaymentInfo
             {
                 Amount = amount,
-                ReferenceNumber = gatewayComponent.GetHostedPaymentInfoToken( gateway, _hostedPaymentInfoControl ),
+                ReferenceNumber = paymentToken,
                 FirstName = tbFirstName.Text,
                 LastName = tbLastName.Text,
                 Street1 = acAddress.Street1,
@@ -220,11 +238,11 @@ namespace RockWeb.Blocks.Finance
                 //GatewayPersonIdentifier = "TODO when a FinancialPersonSavedAccount is selected instead of entering a new payment"
             };
 
-            string errorMessage;
-            var financialTransaction = gatewayComponent.Charge( gateway, referencePaymentInfo, out errorMessage );
+            string chargeErrorMessage;
+            var financialTransaction = gatewayComponent.Charge( gateway, referencePaymentInfo, out chargeErrorMessage );
             if ( financialTransaction == null )
             {
-                ceSaleResponse.Text = errorMessage;
+                ceSaleResponse.Text = chargeErrorMessage;
             }
             else
             {

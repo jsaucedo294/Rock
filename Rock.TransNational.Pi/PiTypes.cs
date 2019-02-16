@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
@@ -688,6 +689,10 @@ namespace Rock.TransNational.Pi
         public int AmountCents { get; set; }
     }
 
+    /// <summary>
+    /// The Response from the Tokenizer (Hosted Payment Info Collector) process
+    /// </summary>
+    /// <seealso cref="Rock.TransNational.Pi.BaseResponseData" />
     public class TokenizerResponse : BaseResponseData
     {
         /// <summary>
@@ -698,6 +703,20 @@ namespace Rock.TransNational.Pi
         /// </value>
         [JsonProperty( "message" )]
         public new string Message { get; set; }
+
+        /// <summary>
+        /// Determines whether [has validation error].
+        /// </summary>
+        /// <returns>
+        ///   <c>true</c> if [has validation error]; otherwise, <c>false</c>.
+        /// </returns>
+        public bool HasValidationError()
+        {
+            return this.Status == "validation" || ( !this.IsSuccessStatus() && this.Invalid?.Any() == true );
+        }
+
+        [JsonProperty( "invalid" )]
+        public string[] Invalid { get; set; }
     }
 
     /// <summary>
