@@ -3396,6 +3396,40 @@ FROM (
             }
         }
 
+        private static int UpdatePersonGivingLeaderId(int? personId)
+        {
+            return 0;
+            /*
+            UPDATE x
+SET x.GivingLeaderIdPersistedIndexed = x.CalculatedGivingLeaderId
+FROM (
+    SELECT p.Id
+        ,p.NickName
+        ,p.LastName
+        ,p.GivingLeaderIdPersistedIndexed
+        ,isnull(pf.CalculatedGivingLeaderId, p.Id) CalculatedGivingLeaderId
+    FROM Person p
+    OUTER APPLY (
+        SELECT TOP 1 p2.[Id] CalculatedGivingLeaderId
+			                    FROM [GroupMember] gm
+			                    INNER JOIN [GroupTypeRole] r on r.[Id] = gm.[GroupRoleId]
+			                    INNER JOIN [Person] p2 ON p2.[Id] = gm.[PersonId]
+			                    WHERE gm.[GroupId] = p.GivingGroupId
+			                    AND p2.[IsDeceased] = 0
+			                    AND p2.[GivingGroupId] = p.GivingGroupId
+			                    ORDER BY r.[Order], p2.[Gender], p2.[BirthYear], p2.[BirthMonth], p2.[BirthDay]
+        ) pf
+    WHERE (
+            p.GivingLeaderIdPersistedIndexed IS NULL
+            OR (p.GivingLeaderIdPersistedIndexed != pf.CalculatedGivingLeaderId)
+            ) 
+			) x
+
+
+
+            */
+        }
+
         #endregion
     }
 }
