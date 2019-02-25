@@ -72,6 +72,7 @@
     </Compile>
     <Compile Include="PledgeSummary.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Rest\GivingStatementController.cs" />
     <Compile Include="Rest\StatementGeneratorFinancialTransactionsController.cs" />
     <Compile Include="StatementGeneratorRecipient.cs" />
     <Compile Include="StatementGeneratorOptions.cs" />
