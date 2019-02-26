@@ -37,7 +37,7 @@ namespace Rock.StatementGenerator.Rest
         {
             var definedTypeCache = DefinedTypeCache.Get( SystemGuid.DefinedType.STATEMENT_GENERATOR_LAVA_TEMPLATE );
 
-            if (definedTypeCache == null)
+            if ( definedTypeCache == null )
             {
                 throw new Exception( "The defined type 'Statement Generator Lava Template' could not be found." );
             }
@@ -46,8 +46,8 @@ namespace Rock.StatementGenerator.Rest
             var templateValue = templateDefinedValueId.HasValue ?
                 templateValues.FirstOrDefault( dv => dv.Id == templateDefinedValueId.Value ) :
                 templateValues.OrderBy( dv => dv.Order ).FirstOrDefault();
-            
-            if (templateValue == null)
+
+            if ( templateValue == null )
             {
                 throw new Exception( string.Format(
                     "The defined value '{0}' within 'Statement Generator Lava Template' could not be found.",
@@ -123,9 +123,14 @@ namespace Rock.StatementGenerator.Rest
                 }
             }
 
-            var body =  template.ResolveMergeFields( mergeFields, currentPerson );
+            if ( !mergeFields.ContainsKey( "LavaTemplate" ) )
+            {
+                mergeFields.Add( "LavaTemplate", templateValue );
+            }
+
+            var body = template.ResolveMergeFields( mergeFields, currentPerson );
             var footer = templateValue.GetAttributeValue( "FooterHtml" ) ?? string.Empty;
-            var html = string.Format("{0}\n{1}", body, footer);
+            var html = string.Format( "{0}\n{1}", body, footer );
             //return new string( html.Where( c => !char.IsControl( c ) ).ToArray() );
 
             var response = new HttpResponseMessage();
