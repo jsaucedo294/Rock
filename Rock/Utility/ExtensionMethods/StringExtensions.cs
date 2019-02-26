@@ -37,7 +37,6 @@ namespace Rock
         /// Accepts an encoded string and returns an encoded string
         /// </summary>
         /// <param name="encodedString"></param>
-        /// <param name="Server"></param>
         public static string ScrubEncodedStringForXSSObjects( string encodedString)
         {
             ///Characters used by DOM Objects; javascript, document, window and URLs
@@ -45,7 +44,7 @@ namespace Rock
 
             if ( encodedString.IndexOfAny( badCharacters ) >= 0 )
             {
-                return "%252//SomeFakeUnrealURL//%252";
+                return "%252f";
             }
             else
             {
