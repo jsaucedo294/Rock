@@ -154,11 +154,16 @@ namespace Rock.Model
         /// <returns>A queryable collection of <see cref="Rock.Model.GroupMember">GroupMembers</see> with specified properties eagerly loaded.</returns>
         public IQueryable<GroupMember> Queryable( string includes, bool includeDeceased, bool includeArchived )
         {
-            var qry = base.Queryable( includes );
-
-            if ( !includeArchived )
+            IQueryable<GroupMember> qry;
+                
+            if ( includeArchived )
             {
-                qry = qry.Where( a => a.IsArchived == false );
+                // by default, all GroupMember Queries treat 'IsArchived' as a soft-deleted, and therefore don't include those records unless AsNoFilter is used
+                qry = base.AsNoFilter( includes );
+            }
+            else
+            {
+                qry = base.Queryable( includes );
             }
 
             if ( !includeDeceased )
