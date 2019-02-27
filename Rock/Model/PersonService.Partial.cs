@@ -230,7 +230,8 @@ namespace Rock.Model
                 .ToList()
                 .ToDictionary(
                     p => p.Id,
-                    p => {
+                    p =>
+                    {
                         var result = new PersonMatchResult( searchParameters, p )
                         {
                             LastNameMatched = true
@@ -248,7 +249,7 @@ namespace Rock.Model
                 Queryable( includeDeceased, includeBusinesses )
                     .AsNoTracking()
                     .Where(
-                        p => (p.Email != String.Empty && p.Email != null && p.Email == searchParameters.Email) ||
+                        p => ( p.Email != String.Empty && p.Email != null && p.Email == searchParameters.Email ) ||
                         previousEmailQry.Any( a => a.PersonAlias.PersonId == p.Id && a.SearchValue == searchParameters.Email && a.SearchTypeValueId == searchTypeValueId )
                     )
                     .Select( p => new PersonSummary()
@@ -477,7 +478,7 @@ namespace Rock.Model
             /// <value>
             /// The suffix value identifier.
             /// </value>
-            public int? SuffixValueId { get; set;  }
+            public int? SuffixValueId { get; set; }
         }
 
         /// <summary>
@@ -494,7 +495,7 @@ namespace Rock.Model
             public PersonMatchResult( PersonMatchQuery query, PersonSummary person )
             {
                 PersonId = person.Id;
-                FirstNameMatched = ( person.FirstName != null && person.FirstName != String.Empty && person.FirstName.Equals(query.FirstName, StringComparison.CurrentCultureIgnoreCase) ) || ( person.NickName != null && person.NickName != String.Empty && person.NickName.Equals(query.FirstName, StringComparison.CurrentCultureIgnoreCase) );
+                FirstNameMatched = ( person.FirstName != null && person.FirstName != String.Empty && person.FirstName.Equals( query.FirstName, StringComparison.CurrentCultureIgnoreCase ) ) || ( person.NickName != null && person.NickName != String.Empty && person.NickName.Equals( query.FirstName, StringComparison.CurrentCultureIgnoreCase ) );
                 LastNameMatched = person.LastName != null && person.LastName != String.Empty && person.LastName.Equals( query.LastName, StringComparison.CurrentCultureIgnoreCase );
                 SuffixMatched = query.SuffixValueId.HasValue && person.SuffixValueId != null && query.SuffixValueId == person.SuffixValueId;
                 GenderMatched = query.Gender.HasValue & query.Gender == person.Gender;
@@ -531,7 +532,9 @@ namespace Rock.Model
             /// Calculates a score representing the likelihood this match is the correct match. Higher is better.
             /// </summary>
             /// <returns></returns>
-            public int ConfidenceScore { get
+            public int ConfidenceScore
+            {
+                get
                 {
                     int total = 0;
 
@@ -576,7 +579,8 @@ namespace Rock.Model
                     }
 
                     return total;
-                } }
+                }
+            }
         }
 
         /// <summary>
@@ -631,7 +635,7 @@ namespace Rock.Model
             var match = matches.FirstOrDefault();
 
             // Check if we care about updating the person's primary email
-            if (updatePrimaryEmail && match != null)
+            if ( updatePrimaryEmail && match != null )
             {
                 return UpdatePrimaryEmail( personMatchQuery.Email, match );
             }
@@ -1133,7 +1137,7 @@ namespace Rock.Model
                         .Where( p => p.Aliases.Any( a => a.AliasPersonGuid == personGuid.Value ) );
                 }
 
-                var previousNamesQry = new PersonPreviousNameService( this.Context as RockContext ).Queryable();
+                var previousNamesQry = new PersonPreviousNameService( this.Context as RockContext ).Queryable().AsNoTracking();
 
                 if ( allowFirstNameOnly )
                 {
@@ -1200,7 +1204,7 @@ namespace Rock.Model
         {
             string fullname = !string.IsNullOrWhiteSpace( firstName ) ? firstName + " " + lastName : lastName;
 
-            var previousNamesQry = new PersonPreviousNameService( this.Context as RockContext ).Queryable();
+            var previousNamesQry = new PersonPreviousNameService( this.Context as RockContext ).Queryable().AsNoTracking();
 
             var qry = Queryable( includeDeceased, includeBusinesses );
             if ( includeBusinesses )
@@ -2070,6 +2074,34 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Gets the Person by action identifier
+        /// </summary>
+        /// <param name="encryptedKey">The encrypted key.</param>
+        /// <param name="action">The action.</param>
+        /// <returns></returns>
+        public Person GetByPersonActionIdentifier( string encryptedKey, string action )
+        {
+            string key = encryptedKey.Replace( '!', '%' );
+            key = System.Web.HttpUtility.UrlDecode( key );
+            string concatinatedKeys = Rock.Security.Encryption.DecryptString( key );
+            string[] keyParts = concatinatedKeys.Split( '>' );
+            if ( keyParts.Length == 2 )
+            {
+                Guid guid = new Guid( keyParts[0] );
+                string actionPart = keyParts[1];
+
+                Person person = Get( guid );
+
+                if ( person != null && actionPart.Equals( action, StringComparison.OrdinalIgnoreCase ) )
+                {
+                    return person;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Special override of Entity.GetByUrlEncodedKey for Person. Gets the Person by impersonation token (rckipid) and validates it against a Rock.Model.PersonToken
         /// NOTE: You might want to use GetByImpersonationToken instead to prevent a token from being used that was limited to a specific page
         /// </summary>
@@ -2794,7 +2826,7 @@ namespace Rock.Model
                 demographicChanges,
                 false,
                 null,
-                rockContext.SourceOfChange);
+                rockContext.SourceOfChange );
 
             if ( isFamilyGroup )
             {
@@ -2809,7 +2841,7 @@ namespace Rock.Model
                     groupId,
                     false,
                     null,
-                    rockContext.SourceOfChange);
+                    rockContext.SourceOfChange );
             }
         }
 
@@ -2865,7 +2897,7 @@ namespace Rock.Model
                         demographicChanges,
                         false,
                         null,
-                        rockContext.SourceOfChange);
+                        rockContext.SourceOfChange );
 
                     person.GivingGroupId = groupId;
                     rockContext.SaveChanges();
@@ -3239,7 +3271,7 @@ namespace Rock.Model
 
             if ( personId.HasValue )
             {
-                personQuery = personService.AsNoFilter().Where( a => a.Id == personId && !a.IsDeceased);
+                personQuery = personService.AsNoFilter().Where( a => a.Id == personId && !a.IsDeceased );
             }
             else
             {
@@ -3347,6 +3379,83 @@ FROM (
             p.PrimaryFamilyId IS NULL
             OR (p.PrimaryFamilyId != pf.CalculatedPrimaryFamilyId)
             )" );
+
+            if ( personId.HasValue )
+            {
+                sqlUpdateBuilder.Append( $" AND ( p.Id = @personId) " );
+            }
+
+            sqlUpdateBuilder.Append( @"    ) x " );
+
+            if ( personId.HasValue )
+            {
+                return rockContext.Database.ExecuteSqlCommand( sqlUpdateBuilder.ToString(), new System.Data.SqlClient.SqlParameter( "@personId", personId.Value ) );
+            }
+            else
+            {
+                return rockContext.Database.ExecuteSqlCommand( sqlUpdateBuilder.ToString() );
+            }
+        }
+
+        /// <summary>
+        /// Ensures the GivingLeaderId is correct for the specified person
+        /// </summary>
+        /// <param name="personId">The person identifier.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        public static bool UpdateGivingLeaderId( int personId, RockContext rockContext )
+        {
+            int recordsUpdated = UpdatePersonGivingLeaderId( personId, rockContext );
+            return recordsUpdated != 0;
+        }
+
+        /// <summary>
+        /// Ensures the GivingLeaderId is correct for all person records in the database
+        /// </summary>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        public static int UpdateGivingLeaderIdAll( RockContext rockContext )
+        {
+            return UpdatePersonGivingLeaderId( null, rockContext );
+        }
+
+        /// <summary>
+        /// Updates the person giving leader identifier for the specified person, or for all persons in the database if personId is null.
+        /// </summary>
+        /// <param name="personId">The person identifier.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        private static int UpdatePersonGivingLeaderId( int? personId, RockContext rockContext )
+        {
+            var sqlUpdateBuilder = new StringBuilder();
+            sqlUpdateBuilder.Append( @"
+UPDATE x
+SET x.GivingLeaderId = x.CalculatedGivingLeaderId
+FROM (
+	SELECT p.Id
+		,p.NickName
+		,p.LastName
+		,p.GivingLeaderId
+		,isnull(pf.CalculatedGivingLeaderId, p.Id) CalculatedGivingLeaderId
+	FROM Person p
+	OUTER APPLY (
+		SELECT TOP 1 p2.[Id] CalculatedGivingLeaderId
+		FROM [GroupMember] gm
+		INNER JOIN [GroupTypeRole] r ON r.[Id] = gm.[GroupRoleId]
+		INNER JOIN [Person] p2 ON p2.[Id] = gm.[PersonId]
+		WHERE gm.[GroupId] = p.GivingGroupId
+			AND p2.[IsDeceased] = 0
+			AND p2.[GivingGroupId] = p.GivingGroupId
+		ORDER BY r.[Order]
+			,p2.[Gender]
+			,p2.[BirthYear]
+			,p2.[BirthMonth]
+			,p2.[BirthDay]
+		) pf
+	WHERE (
+			p.GivingLeaderId IS NULL
+			OR (p.GivingLeaderId != pf.CalculatedGivingLeaderId)
+			)" );
 
             if ( personId.HasValue )
             {

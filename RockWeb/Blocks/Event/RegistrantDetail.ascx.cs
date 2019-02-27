@@ -645,20 +645,28 @@ namespace RockWeb.Blocks.Event
                 if ( registrant != null && registrant.PersonAlias != null && registrant.PersonAlias.Person != null )
                 {
                     ppPerson.SetValue( registrant.PersonAlias.Person );
-                    if ( TemplateState != null && TemplateState.RequiredSignatureDocumentTemplate != null )
-                    {
-                        fuSignedDocument.Label = TemplateState.RequiredSignatureDocumentTemplate.Name;
-                        if ( TemplateState.RequiredSignatureDocumentTemplate.BinaryFileType != null )
-                        {
-                            fuSignedDocument.BinaryFileTypeGuid = TemplateState.RequiredSignatureDocumentTemplate.BinaryFileType.Guid;
-                        }
+                }
+                else
+                {
+                    ppPerson.SetValue( null );
+                }
 
+                if ( TemplateState != null && TemplateState.RequiredSignatureDocumentTemplate != null )
+                {
+                    fuSignedDocument.Label = TemplateState.RequiredSignatureDocumentTemplate.Name;
+                    if ( TemplateState.RequiredSignatureDocumentTemplate.BinaryFileType != null )
+                    {
+                        fuSignedDocument.BinaryFileTypeGuid = TemplateState.RequiredSignatureDocumentTemplate.BinaryFileType.Guid;
+                    }
+
+                    if ( ppPerson.PersonId.HasValue )
+                    {
                         var signatureDocument = new SignatureDocumentService( rockContext )
                             .Queryable().AsNoTracking()
                             .Where( d =>
                                 d.SignatureDocumentTemplateId == TemplateState.RequiredSignatureDocumentTemplateId.Value &&
                                 d.AppliesToPersonAlias != null &&
-                                d.AppliesToPersonAlias.PersonId == registrant.PersonAlias.PersonId &&
+                                d.AppliesToPersonAlias.PersonId == ppPerson.PersonId &&
                                 d.LastStatusDate.HasValue &&
                                 d.Status == SignatureDocumentStatus.Signed &&
                                 d.BinaryFile != null )
@@ -670,17 +678,13 @@ namespace RockWeb.Blocks.Event
                             hfSignedDocumentId.Value = signatureDocument.Id.ToString();
                             fuSignedDocument.BinaryFileId = signatureDocument.BinaryFileId;
                         }
+                    }
 
-                        fuSignedDocument.Visible = true;
-                    }
-                    else
-                    {
-                        fuSignedDocument.Visible = false;
-                    }
+                    fuSignedDocument.Visible = true;
                 }
                 else
                 {
-                    ppPerson.SetValue( null );
+                    fuSignedDocument.Visible = false;
                 }
 
                 if ( RegistrantState != null )
@@ -771,7 +775,7 @@ namespace RockWeb.Blocks.Event
                             var editControl = attribute.AddControl( fieldVisibilityWrapper.Controls, value, BlockValidationGroup, setValues, true, field.IsRequired, null, field.Attribute.Description );
                             fieldVisibilityWrapper.EditControl = editControl;
 
-                            bool hasDependantVisibilityRule = form.Fields.Any( a => a.FieldVisibilityRules.Any( r => r.ComparedToAttributeGuid == attribute.Guid ) );
+                            bool hasDependantVisibilityRule = form.Fields.Any( a => a.FieldVisibilityRules.RuleList.Any( r => r.ComparedToAttributeGuid == attribute.Guid ) );
 
                             if ( hasDependantVisibilityRule && attribute.FieldType.Field.HasChangeHandler( editControl ) )
                             {
